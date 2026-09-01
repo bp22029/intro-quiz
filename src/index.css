@@ -23,3 +23,11 @@ button {
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* YT.Player は渡した <div> を iframe に置換する。サイズをスロットに追従させる */
+.yt-slot iframe {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+}
