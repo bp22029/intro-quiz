@@ -4,13 +4,20 @@
 import { useEffect, useState } from "react";
 import { beep, unlockAudio } from "./beep";
 import { socket } from "./socket";
+import { useCountdown } from "./useCountdown";
 import type { PlayMode, Song, State } from "./types";
 
 const EMPTY: State = {
   buzzedBy: null,
   lockedIds: [],
   players: [],
-  round: { index: 0, revealed: false, playing: false },
+  round: {
+    index: 0,
+    revealed: false,
+    playing: false,
+    wrongName: null,
+    resumeInMs: 0,
+  },
   mode: "manual",
 };
 
@@ -20,11 +27,13 @@ export default function HostView() {
   const [connected, setConnected] = useState(socket.connected);
   const [armed, setArmed] = useState(false); // 音声解除済みか
 
-  const { index, revealed, playing } = state.round;
+  const { index, revealed, playing, wrongName, resumeInMs } = state.round;
   const mode = state.mode;
   const song = songs[index];
   const buzzed = state.buzzedBy;
   const last = songs.length - 1;
+  const countdown = useCountdown(resumeInMs);
+  const showWrong = wrongName !== null;
 
   useEffect(() => {
     fetch("/songs.json")
@@ -89,10 +98,17 @@ export default function HostView() {
       {/* 早押し状況 */}
       <div
         className={`rounded-2xl px-5 py-6 text-center ${
-          buzzed ? "bg-emerald-700" : "bg-neutral-900"
+          showWrong ? "bg-red-800" : buzzed ? "bg-emerald-700" : "bg-neutral-900"
         }`}
       >
-        {buzzed ? (
+        {showWrong ? (
+          <>
+            <div className="text-4xl font-black">不正解 — {wrongName} さん</div>
+            <div className="mt-1 text-2xl text-red-100">
+              {countdown > 0 ? `受付再開まで ${countdown}` : "受付を再開しました"}
+            </div>
+          </>
+        ) : buzzed ? (
           <>
             <div className="text-lg text-emerald-100">回答者</div>
             <div className="break-all text-5xl font-black leading-tight">

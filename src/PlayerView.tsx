@@ -1,14 +1,43 @@
 import { useEffect, useRef, useState } from "react";
 import { socket } from "./socket";
+import { useCountdown } from "./useCountdown";
 import type { JoinAck, State } from "./types";
 
 const NAME_KEY = "introquiz:name";
+const CLIENT_KEY = "introquiz:clientId";
+
+/**
+ * 端末ごとの固定ID。socket.id はページを開き直すと変わるため、
+ * これを参加者の identity にする。これがないとリロードでお手つきが解除できてしまう。
+ */
+function getClientId(): string {
+  try {
+    const saved = localStorage.getItem(CLIENT_KEY);
+    if (saved) return saved;
+    const id =
+      globalThis.crypto?.randomUUID?.() ??
+      `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(CLIENT_KEY, id);
+    return id;
+  } catch {
+    // localStorage が使えない環境では毎回別人扱いになるが、動作は止めない
+    return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+const clientId = getClientId();
 
 const EMPTY: State = {
   buzzedBy: null,
   lockedIds: [],
   players: [],
-  round: { index: 0, revealed: false, playing: false },
+  round: {
+    index: 0,
+    revealed: false,
+    playing: false,
+    wrongName: null,
+    resumeInMs: 0,
+  },
   mode: "manual",
 };
 
@@ -38,10 +67,10 @@ export default function PlayerView() {
   useEffect(() => {
     const onConnect = () => {
       setConnected(true);
-      setMyId(socket.id ?? null);
-      // サーバーはメモリ管理なので socket.id が変わると登録が消えている。毎回送り直す。
+      setMyId(clientId);
+      // サーバーはメモリ管理なので、繋がり直すたびに登録し直す
       const n = nameRef.current;
-      if (n) socket.emit("join", n, (_ack: JoinAck) => {});
+      if (n) socket.emit("join", { name: n, clientId }, (_ack: JoinAck) => {});
     };
     const onDisconnect = () => setConnected(false);
     const onState = (s: State) => setState(s);
@@ -61,7 +90,7 @@ export default function PlayerView() {
   // 名前が決まった / 変わったタイミングでも join し直す
   useEffect(() => {
     if (name && socket.connected) {
-      socket.emit("join", name, (ack: JoinAck) => setMyId(ack.id));
+      socket.emit("join", { name, clientId }, (ack: JoinAck) => setMyId(ack.id));
     }
   }, [name]);
 
@@ -69,6 +98,10 @@ export default function PlayerView() {
   useEffect(() => {
     if (state.buzzedBy === null) setPressed(false);
   }, [state.buzzedBy]);
+
+  // お手つき後のカウントダウン。サーバーがこの間 buzz を受け付けない
+  const countdown = useCountdown(state.round.resumeInMs);
+  const showWrong = state.round.wrongName !== null;
 
   function submitName() {
     const n = draft.trim().slice(0, 12) || "名無し";
@@ -96,8 +129,13 @@ export default function PlayerView() {
           className="rounded-xl bg-red-600 px-5 py-5 text-2xl font-bold active:bg-red-700"
           onClick={submitName}
         >
-          参加する
+          {myId ? "この名前にする" : "参加する"}
         </button>
+        {myId && (
+          <p className="text-center text-sm text-neutral-500">
+            名前を変えても、この曲のお手つきは解除されません
+          </p>
+        )}
         <ConnBadge connected={connected} />
       </div>
     );
@@ -108,11 +146,18 @@ export default function PlayerView() {
   const someoneElse = !!state.buzzedBy && !iAmBuzzed;
 
   // 表示は state を素直に描くが、pressed のときだけローカル優先で先に殺す
-  const disabled = pressed || !!state.buzzedBy || iAmLocked;
+  const disabled = pressed || !!state.buzzedBy || iAmLocked || showWrong;
 
   let label: string;
   let color: string;
-  if (iAmBuzzed) {
+  if (showWrong) {
+    // サーバーがこの間 buzz を弾くので、押せないことを画面でも明示する
+    label =
+      countdown > 0
+        ? `不正解\n${state.round.wrongName}さん\n\n${countdown}`
+        : "再開！";
+    color = countdown > 0 ? "bg-red-800" : "bg-neutral-700";
+  } else if (iAmBuzzed) {
     label = "あなた！";
     color = "bg-green-600";
   } else if (someoneElse) {
@@ -140,7 +185,15 @@ export default function PlayerView() {
   return (
     <div className="flex h-full flex-col p-3">
       <div className="flex items-center justify-between pb-2 text-sm text-neutral-400">
-        <span>{name}</span>
+        <button
+          className="rounded-lg bg-neutral-800 px-3 py-1.5 text-neutral-200 active:bg-neutral-700"
+          onClick={() => {
+            setDraft(name);
+            setName(null); // 名前入力画面へ戻る。clientId は変わらないのでロックは維持される
+          }}
+        >
+          {name} <span className="text-neutral-500">✎ 変更</span>
+        </button>
         <ConnBadge connected={connected} />
       </div>
       <button

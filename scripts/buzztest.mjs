@@ -6,12 +6,17 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // リモート検証では往復が乗るので待ちを伸ばす（判定の取りこぼし防止）
 const D = Number(process.env.D) || (URL.startsWith("https") ? 900 : 200);
 
+let cidSeq = 0;
 function mk(name) {
   const s = io(URL, { transports: ["websocket"] });
+  // 参加者の identity は socket.id ではなく clientId。テストでも同じ形で送る。
+  s.cid = `buzztest-${Date.now()}-${cidSeq++}`;
   s.lastState = null;
   s.on("state", (st) => (s.lastState = st));
   return new Promise((res) => {
-    s.on("connect", () => s.emit("join", name, () => res(s)));
+    s.on("connect", () =>
+      s.emit("join", { name, clientId: s.cid }, () => res(s)),
+    );
   });
 }
 
@@ -28,6 +33,10 @@ const host = io(URL, { transports: ["websocket"] });
 await new Promise((r) => host.on("connect", r));
 await wait(D);
 
+// ロックは切断では消えない（リロード回避策）ので、前回実行の残りを明示的に片付ける
+host.emit("host:nextRound");
+await wait(D);
+
 check("3人 join されている", a.lastState.players.length === 3);
 check("名前が12文字で切られる前提の登録", a.lastState.players.some((p) => p.name === "あきら"));
 
@@ -41,7 +50,7 @@ check("誰か1人だけが buzzedBy になる", winner !== null);
 check("全員が同じ buzzedBy を見ている", b.lastState.buzzedBy?.id === winner.id && c.lastState.buzzedBy?.id === winner.id);
 
 // --- 押されている間は他人が押せない ---
-const others = [a, b, c].filter((s) => s.id !== winner.id);
+const others = [a, b, c].filter((s) => s.cid !== winner.id);
 others[0].emit("buzz");
 await wait(D);
 check("押下中に他人が押しても buzzedBy が変わらない", a.lastState.buzzedBy.id === winner.id);
@@ -52,8 +61,11 @@ await wait(D);
 check("誤答で受付が再開する (buzzedBy=null)", a.lastState.buzzedBy === null);
 check("誤答した本人だけが lockedIds に入る", a.lastState.lockedIds.length === 1 && a.lastState.lockedIds[0] === winner.id);
 
+// お手つき後は3秒のカウントダウンが入る。明けるまで誰も押せない。
+await wait(3200);
+
 // --- ロックされた本人は押せない ---
-const loser = [a, b, c].find((s) => s.id === winner.id);
+const loser = [a, b, c].find((s) => s.cid === winner.id);
 loser.emit("buzz");
 await wait(D);
 check("ロック済みの本人は押せない", a.lastState.buzzedBy === null);
@@ -61,7 +73,7 @@ check("ロック済みの本人は押せない", a.lastState.buzzedBy === null);
 // --- 他人は押せる ---
 others[1].emit("buzz");
 await wait(D);
-check("ロックされていない他人は押せる", a.lastState.buzzedBy?.id === others[1].id);
+check("ロックされていない他人は押せる", a.lastState.buzzedBy?.id === others[1].cid);
 
 // --- reset はロックしない ---
 host.emit("host:reset");

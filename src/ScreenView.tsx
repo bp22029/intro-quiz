@@ -4,13 +4,20 @@ import { useEffect, useRef, useState } from "react";
 import { beep, unlockAudio } from "./beep";
 import { socket } from "./socket";
 import type { Song, State } from "./types";
+import { useCountdown } from "./useCountdown";
 import { useYouTube, ytErrorMessage } from "./useYouTube";
 
 const EMPTY: State = {
   buzzedBy: null,
   lockedIds: [],
   players: [],
-  round: { index: 0, revealed: false, playing: false },
+  round: {
+    index: 0,
+    revealed: false,
+    playing: false,
+    wrongName: null,
+    resumeInMs: 0,
+  },
   mode: "manual",
 };
 
@@ -21,7 +28,7 @@ export default function ScreenView() {
   const [ready, setReady] = useState(false); // 「準備」クリック済みか
   const [elapsed, setElapsed] = useState(0);
 
-  const { index, revealed, playing } = state.round;
+  const { index, revealed, playing, wrongName, resumeInMs } = state.round;
   const mode = state.mode;
   const song = songs[index];
 
@@ -88,6 +95,8 @@ export default function ScreenView() {
 
   const currentError: number | undefined = yt.errors[index];
   const buzzed = state.buzzedBy;
+  const countdown = useCountdown(resumeInMs);
+  const showWrong = wrongName !== null;
 
   // 音を出すには1クリックが必要（ブラウザの制約）
   if (!ready) {
@@ -148,14 +157,29 @@ export default function ScreenView() {
       {/* 右: 大きく見せる領域 */}
       <main
         className={`relative flex min-w-0 flex-1 flex-col items-center justify-center overflow-hidden px-10 transition-colors duration-150 ${
-          buzzed && !revealed ? "bg-emerald-700" : "bg-neutral-950"
+          showWrong
+            ? "bg-red-800"
+            : buzzed && !revealed
+              ? "bg-emerald-700"
+              : "bg-neutral-950"
         }`}
       >
         <div className="absolute left-8 top-6 text-2xl text-neutral-500">
           第 {index + 1} 問 / 全 {songs.length || "-"} 問
         </div>
 
-        {revealed ? (
+        {showWrong ? (
+          <div className="text-center">
+            <div className="text-[13vw] font-black leading-none">不正解</div>
+            <div className="mt-2 text-4xl text-red-100">{wrongName} さん</div>
+            <div className="mt-10 text-3xl text-red-100">
+              {countdown > 0 ? "まもなく再開" : "受付を再開しました"}
+            </div>
+            <div className="text-[12vw] font-black leading-none tabular-nums">
+              {countdown > 0 ? countdown : "GO!"}
+            </div>
+          </div>
+        ) : revealed ? (
           <div className="text-center">
             <div className="mb-4 text-3xl tracking-[0.4em] text-neutral-500">
               こたえ

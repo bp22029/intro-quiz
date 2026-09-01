@@ -9,9 +9,19 @@ import type { JoinAck, PlayMode, Player, State } from "../src/types";
 // 状態（すべてプロセスメモリ。永続化しない。単一インスタンス前提）
 // ---------------------------------------------------------------------------
 
-const players = new Map<string, Player>(); // socket.id -> Player
-const lockedIds = new Set<string>(); // このラウンドで誤答した socket.id
+// 参加者の識別は socket.id ではなく、端末が localStorage に保持する clientId で行う。
+// socket.id はページを開き直すたびに変わるため、それを鍵にするとリロードで
+// お手つきが解除されてしまう（実際に当日そう使われた）。
+const socketToClient = new Map<string, string>(); // socket.id -> clientId
+const players = new Map<string, Player>(); // clientId -> Player（Player.id は clientId）
+const lockedIds = new Set<string>(); // このラウンドで誤答した clientId
 let buzzedBy: Player | null = null;
+
+/** 同じ clientId で開いている接続がまだ残っているか */
+function hasLiveSocket(clientId: string): boolean {
+  for (const cid of socketToClient.values()) if (cid === clientId) return true;
+  return false;
+}
 
 // 進行状態。管理画面(/host)の操作を投影画面(/screen)へ伝えるためサーバーで持つ
 let index = 0;
@@ -19,12 +29,35 @@ let revealed = false;
 let playing = false;
 let mode: PlayMode = "manual";
 
+// お手つき演出。「不正解」を出してから受付を再開するまでの待ち時間。
+const WRONG_COUNTDOWN_MS = 3000;
+let wrongName: string | null = null;
+let resumeAt = 0; // epoch ms。この時刻までは buzz を受け付けない
+let resumeTimer: NodeJS.Timeout | null = null;
+
+/** 演出を打ち切って受付中に戻す */
+function clearWrong() {
+  if (resumeTimer) {
+    clearTimeout(resumeTimer);
+    resumeTimer = null;
+  }
+  wrongName = null;
+  resumeAt = 0;
+}
+
 function snapshot(): State {
   return {
     buzzedBy,
     lockedIds: [...lockedIds],
     players: [...players.values()],
-    round: { index, revealed, playing },
+    round: {
+      index,
+      revealed,
+      playing,
+      wrongName,
+      // 絶対時刻ではなく残り時間で送る。端末ごとの時計のズレを持ち込まないため。
+      resumeInMs: Math.max(0, resumeAt - Date.now()),
+    },
     mode,
   };
 }
@@ -84,23 +117,42 @@ io.on("connection", (socket) => {
   // 4.5: まだ join していない相手にも接続直後に必ず1回送る
   socket.emit("state", snapshot());
 
-  socket.on("join", (rawName: unknown, ack?: (r: JoinAck) => void) => {
+  socket.on("join", (payload: unknown, ack?: (r: JoinAck) => void) => {
+    // 参加者は { name, clientId } を送る。テスト用に文字列だけの形も受ける。
+    let rawName: unknown = payload;
+    let clientId = "";
+    if (payload && typeof payload === "object") {
+      rawName = (payload as { name?: unknown }).name;
+      const c = (payload as { clientId?: unknown }).clientId;
+      if (typeof c === "string" && c.length > 0 && c.length <= 64) clientId = c;
+    }
+    if (!clientId) clientId = `sock:${socket.id}`; // clientId を送ってこない相手の保険
+
     const name =
       String(rawName ?? "")
         .trim()
         .slice(0, 12) || "名無し";
-    const player: Player = { id: socket.id, name };
-    players.set(socket.id, player);
-    console.log(`[join] ${name} (${socket.id}) / ${players.size}人`);
-    if (typeof ack === "function") ack({ ok: true, id: socket.id, name });
+
+    socketToClient.set(socket.id, clientId);
+    const player: Player = { id: clientId, name };
+    players.set(clientId, player);
+
+    // 押している最中の本人が名前を変えた場合に表示を合わせる
+    if (buzzedBy && buzzedBy.id === clientId) buzzedBy = player;
+
+    console.log(`[join] ${name} (${clientId}) / ${players.size}人`);
+    if (typeof ack === "function") ack({ ok: true, id: clientId, name });
     broadcastState();
   });
 
   socket.on("buzz", () => {
     // 4.4: 該当したら黙って return する（エラーを返さない）
     if (buzzedBy !== null) return; // 既に誰かが押している
-    if (lockedIds.has(socket.id)) return; // このラウンドで誤答済み
-    const player = players.get(socket.id);
+    if (Date.now() < resumeAt) return; // お手つき演出中は受け付けない
+    const clientId = socketToClient.get(socket.id);
+    if (!clientId) return; // 未 join
+    if (lockedIds.has(clientId)) return; // このラウンドで誤答済み
+    const player = players.get(clientId);
     if (!player) return; // 未 join
 
     buzzedBy = player;
@@ -114,22 +166,37 @@ io.on("connection", (socket) => {
 
   socket.on("host:reset", () => {
     // 押下の取り消しのみ。ロックはしない
+    clearWrong();
     buzzedBy = null;
     console.log("[host] reset");
     broadcastState();
   });
 
   socket.on("host:wrong", () => {
-    if (buzzedBy) {
-      lockedIds.add(buzzedBy.id);
-      console.log(`[host] wrong: ${buzzedBy.name} をロック`);
-    }
+    if (!buzzedBy) return; // 誰も押していなければ何もしない
+    lockedIds.add(buzzedBy.id);
+    console.log(`[host] wrong: ${buzzedBy.name} をロック`);
+
+    // 「不正解」を出し、3秒のカウントダウン後に受付を再開する
+    clearWrong();
+    wrongName = buzzedBy.name;
+    resumeAt = Date.now() + WRONG_COUNTDOWN_MS;
+    resumeTimer = setTimeout(() => {
+      wrongName = null;
+      resumeAt = 0;
+      resumeTimer = null;
+      console.log("[host] 受付再開");
+      broadcastState();
+    }, WRONG_COUNTDOWN_MS);
+
     buzzedBy = null;
     revealed = false;
+    playing = false;
     broadcastState();
   });
 
   socket.on("host:nextRound", () => {
+    clearWrong();
     buzzedBy = null;
     lockedIds.clear();
     revealed = false;
@@ -142,6 +209,7 @@ io.on("connection", (socket) => {
   socket.on("host:setSong", (rawIndex: unknown) => {
     const n = Number(rawIndex);
     if (!Number.isInteger(n) || n < 0) return;
+    clearWrong();
     index = n;
     revealed = false;
     playing = false;
@@ -152,6 +220,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("host:reveal", () => {
+    clearWrong();
     revealed = true;
     playing = false; // 投影画面側がサビ再生に切り替える
     console.log("[host] reveal");
@@ -177,10 +246,17 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    const player = players.get(socket.id);
-    players.delete(socket.id);
-    lockedIds.delete(socket.id);
-    if (buzzedBy && buzzedBy.id === socket.id) buzzedBy = null;
+    const clientId = socketToClient.get(socket.id);
+    socketToClient.delete(socket.id);
+    if (!clientId) return;
+
+    // 同じ端末が別タブ等でまだ繋がっているなら、参加者としては残す
+    if (hasLiveSocket(clientId)) return;
+
+    const player = players.get(clientId);
+    players.delete(clientId);
+    // lockedIds はあえて消さない。消すとリロードでお手つきが解除できてしまう。
+    if (buzzedBy && buzzedBy.id === clientId) buzzedBy = null;
     if (player) console.log(`[left] ${player.name} / ${players.size}人`);
     broadcastState();
   });

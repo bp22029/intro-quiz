@@ -36,8 +36,13 @@ const b = await mkPlayer("ばんり");
 await wait(D);
 
 check("投影画面に round が届いている", !!screen.lastState?.round);
-check("初期は第1問 (index=0)", screen.lastState.round.index === 0);
-check("既定モードは手動", screen.lastState.mode === "manual");
+
+// サーバーはメモリ上に状態を持ち続けるので、既知の状態に揃えてから検証する
+host.emit("host:setSong", 0);
+host.emit("host:setMode", "manual");
+await wait(D);
+check("第1問に戻せる (index=0)", screen.lastState.round.index === 0);
+check("手動モードに設定できる", screen.lastState.mode === "manual");
 
 // --- 曲送りが投影画面に伝わる ---
 host.emit("host:setSong", 2);
@@ -65,9 +70,11 @@ check("お手つきで受付が再開する", screen.lastState.buzzedBy === null
 check("お手つきで答え表示が消える", screen.lastState.round.revealed === false);
 check("押した本人だけロックされる", screen.lastState.lockedIds.length === 1);
 
+// お手つき後は3秒のカウントダウンが入る。明けてから押せるようになる。
+await wait(3200);
 b.emit("buzz");
 await wait(D);
-check("ロックされていない人は押せる", screen.lastState.buzzedBy?.name === "ばんり");
+check("カウントダウン明けにロックされていない人は押せる", screen.lastState.buzzedBy?.name === "ばんり");
 
 // --- 再生状態の同期 ---
 host.emit("host:setMode", "youtube");
@@ -104,6 +111,42 @@ host.emit("host:setMode", "bogus");
 await wait(D);
 check("不正な曲番号を無視する", screen.lastState.round.index === 1);
 check("不正なモードを無視する", screen.lastState.mode === "youtube");
+
+// --- お手つき演出（不正解表示 + 3秒カウントダウン） ---
+host.emit("host:setSong", 0);
+await wait(D);
+a.emit("buzz");
+await wait(D);
+check("演出テスト前提: あきらが押せている", screen.lastState.buzzedBy?.name === "あきら");
+
+host.emit("host:wrong");
+await wait(D);
+check("不正解の相手名が全画面に配信される", screen.lastState.round.wrongName === "あきら");
+check("カウントダウンの残り時間が配信される", screen.lastState.round.resumeInMs > 1000);
+check("演出中は押下が解除されている", screen.lastState.buzzedBy === null);
+
+b.emit("buzz");
+await wait(D);
+check("カウントダウン中は誰も押せない", screen.lastState.buzzedBy === null);
+
+await wait(3200);
+check("カウントダウン後に不正解表示が消える", screen.lastState.round.wrongName === null);
+check("カウントダウン後に残り時間が0になる", screen.lastState.round.resumeInMs === 0);
+b.emit("buzz");
+await wait(D);
+check("受付再開後は押せる", screen.lastState.buzzedBy?.name === "ばんり");
+
+// 演出中に司会が次の問題へ進めたら、演出を打ち切って即座に受付に戻る
+host.emit("host:wrong");
+await wait(D);
+check("再度お手つき演出に入る", screen.lastState.round.wrongName === "ばんり");
+host.emit("host:setSong", 1);
+await wait(D);
+check("曲送りで演出が打ち切られる", screen.lastState.round.wrongName === null);
+check("曲送りでカウントダウンも解除される", screen.lastState.round.resumeInMs === 0);
+a.emit("buzz");
+await wait(D);
+check("打ち切り後はすぐ押せる", screen.lastState.buzzedBy?.name === "あきら");
 
 console.log(fail.length ? `\n${fail.length} 件 FAIL` : "\nすべて PASS");
 [screen, host, a, b, late].forEach((s) => s.close());
