@@ -21,6 +21,7 @@ const EMPTY: State = {
   },
   mode: "manual",
   songs: [],
+  ytStatus: { ready: false, readyCount: 0, total: 0 },
 };
 
 export default function HostView() {
@@ -62,12 +63,16 @@ export default function HostView() {
   useEffect(() => {
     const onState = (s: State) => setState(s);
     const onBuzzed = () => beep(); // 手元でも鳴らす。曲を止める合図
-    const onConnect = () => setConnected(true);
+    const onConnect = () => {
+      setConnected(true);
+      socket.emit("role:host"); // 曲データを受け取るために名乗る
+    };
     const onDisconnect = () => setConnected(false);
     socket.on("state", onState);
     socket.on("buzzed", onBuzzed);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    if (socket.connected) onConnect();
     return () => {
       socket.off("state", onState);
       socket.off("buzzed", onBuzzed);
@@ -189,8 +194,14 @@ export default function HostView() {
             tone={playing ? "amber" : "blue"}
             onClick={() => socket.emit(playing ? "host:pause" : "host:play")}
             className="col-span-2"
+            // 未準備のまま押すと「再生中なのに音が出ない」状態になるので止める
+            disabled={!state.ytStatus.ready}
           >
-            {playing ? "⏸ 一時停止" : "▶ イントロ再生"}
+            {state.ytStatus.ready
+              ? playing
+                ? "⏸ 一時停止"
+                : "▶ イントロ再生"
+              : `動画を準備中… ${state.ytStatus.readyCount}/${state.ytStatus.total}`}
           </Btn>
         ) : (
           <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-neutral-700 px-4 py-3 text-neutral-300">

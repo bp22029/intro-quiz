@@ -55,7 +55,12 @@ function sanitizeSong(raw: unknown): Song | null {
     artist: str(o.artist, 60),
     owner: str(o.owner, 30),
     startSec: num(o.startSec),
-    chorusSec: num(o.chorusSec),
+    // 未指定は undefined のままにする。0 にすると「サビ＝曲頭」になり、
+    // クライアント側の startSec へのフォールバックが効かなくなる。
+    chorusSec:
+      o.chorusSec === undefined || o.chorusSec === null || o.chorusSec === ""
+        ? undefined
+        : num(o.chorusSec),
   };
 }
 
@@ -83,6 +88,11 @@ function loadSongsFromDisk(): Song[] {
 
 let songs: Song[] = loadSongsFromDisk();
 
+// 投影画面が報告する YouTube プレイヤーの準備状況。
+// 未準備のまま再生を要求すると「サーバーは再生中なのに音が出ない」状態になるため、
+// 管理画面がこれを見て再生ボタンを止められるようにする。
+let ytStatus = { ready: false, readyCount: 0, total: 0 };
+
 // お手つき演出。「不正解」を出してから受付を再開するまでの待ち時間。
 const WRONG_COUNTDOWN_MS = 3000;
 let wrongName: string | null = null;
@@ -106,6 +116,7 @@ function snapshot(): State {
     lockedNames: [...lockedNames],
     players: [...players.values()],
     songs,
+    ytStatus,
     round: {
       index,
       revealed,
@@ -165,13 +176,49 @@ app.get("*", (_req, res) => res.sendFile(path.join(distDir, "index.html")));
 // Socket.IO
 // ---------------------------------------------------------------------------
 
+// 投影画面(/screen)と管理画面(/host)だけが曲データを受け取る。
+// 参加者にも配ると、通信内容を見れば答えが分かってしまう。
+const privileged = new Set<string>();
+
+/** 参加者向け。曲名・アーティスト・推した人を落とす */
+function redacted(full: State): State {
+  return { ...full, songs: [] };
+}
+
 function broadcastState() {
-  io.emit("state", snapshot());
+  const full = snapshot();
+  const hidden = redacted(full);
+  for (const [id, sock] of io.sockets.sockets) {
+    sock.emit("state", privileged.has(id) ? full : hidden);
+  }
 }
 
 io.on("connection", (socket) => {
   // 4.5: まだ join していない相手にも接続直後に必ず1回送る
-  socket.emit("state", snapshot());
+  // 名乗り出るまでは曲データを渡さない
+  socket.emit("state", redacted(snapshot()));
+
+  /** 投影画面・管理画面が自分の役割を申告する。曲データはこの2つにだけ配る */
+  socket.on("role:screen", () => {
+    privileged.add(socket.id);
+    socket.emit("state", snapshot());
+  });
+  socket.on("role:host", () => {
+    privileged.add(socket.id);
+    socket.emit("state", snapshot());
+  });
+
+  /** 投影画面が YouTube プレイヤーの準備状況を知らせる */
+  socket.on("screen:yt", (raw: unknown) => {
+    if (!raw || typeof raw !== "object") return;
+    const o = raw as { ready?: unknown; readyCount?: unknown; total?: unknown };
+    ytStatus = {
+      ready: o.ready === true,
+      readyCount: Number(o.readyCount) || 0,
+      total: Number(o.total) || 0,
+    };
+    broadcastState();
+  });
 
   socket.on("join", (payload: unknown, ack?: (r: JoinAck) => void) => {
     // 参加者は { name, clientId } を送る。テスト用に文字列だけの形も受ける。
@@ -338,6 +385,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     const clientId = socketToClient.get(socket.id);
+    privileged.delete(socket.id);
     socketToClient.delete(socket.id);
     if (!clientId) return;
 

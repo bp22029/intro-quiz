@@ -21,7 +21,8 @@ export type State = {
   players: Player[]; // 参加者一覧
   round: Round;
   mode: PlayMode;
-  songs: Song[]; // 管理画面から編集できるので state に載せて全画面へ配る
+  songs: Song[]; // 管理画面から編集できるので state に載せる（参加者には空で配る）
+  ytStatus: { ready: boolean; readyCount: number; total: number };
 };
 
 export type JoinAck = { ok: true; id: string; name: string };

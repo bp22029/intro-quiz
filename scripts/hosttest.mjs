@@ -19,7 +19,13 @@ function mkClient(name) {
   s.buzzCount = 0;
   s.on("state", (st) => (s.lastState = st));
   s.on("buzzed", () => s.buzzCount++);
-  return new Promise((res) => s.on("connect", () => res(s)));
+  // 曲データは投影画面と管理画面にだけ配られるので、役割を名乗る
+  return new Promise((res) =>
+    s.on("connect", () => {
+      s.emit("role:host");
+      res(s);
+    }),
+  );
 }
 
 async function mkPlayer(name) {

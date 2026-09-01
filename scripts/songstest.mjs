@@ -16,7 +16,13 @@ function conn() {
   const s = io(URL, { transports: ["websocket"] });
   s.lastState = null;
   s.on("state", (st) => (s.lastState = st));
-  return new Promise((res) => s.on("connect", () => res(s)));
+  // 曲データは投影画面と管理画面にだけ配られるので、役割を名乗る
+  return new Promise((res) =>
+    s.on("connect", () => {
+      s.emit("role:host");
+      res(s);
+    }),
+  );
 }
 
 const screen = await conn();

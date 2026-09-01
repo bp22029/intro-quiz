@@ -21,6 +21,7 @@ const EMPTY: State = {
   },
   mode: "manual",
   songs: [],
+  ytStatus: { ready: false, readyCount: 0, total: 0 },
 };
 
 export default function ScreenView() {
@@ -46,13 +47,35 @@ export default function ScreenView() {
   useEffect(() => {
     const onState = (s: State) => setState(s);
     const onBuzzed = () => beep(); // 手動モードではこれが唯一の停止トリガー
+    // 曲データは投影画面と管理画面にだけ配られる。繋がり直すたびに名乗る。
+    const onConnect = () => socket.emit("role:screen");
     socket.on("state", onState);
     socket.on("buzzed", onBuzzed);
+    socket.on("connect", onConnect);
+    if (socket.connected) onConnect();
     return () => {
       socket.off("state", onState);
       socket.off("buzzed", onBuzzed);
+      socket.off("connect", onConnect);
     };
   }, []);
+
+  // プレイヤーの準備状況を管理画面へ知らせる（未準備のまま再生させないため）
+  useEffect(() => {
+    socket.emit("screen:yt", {
+      ready: yt.ready,
+      readyCount: yt.readyCount,
+      total: yt.total,
+    });
+  }, [yt.ready, yt.readyCount, yt.total]);
+
+  // 準備が整う前に再生を要求されていた場合、整った時点で鳴らし直す。
+  // これがないと「管理画面は再生中なのに音が出ない」状態のままになる。
+  useEffect(() => {
+    if (mode === "youtube" && playing && yt.ready && !revealed) {
+      yt.play(index);
+    }
+  }, [yt.ready, mode, playing, revealed, index, yt]);
 
   // --- サーバー状態に合わせて YouTube プレイヤーを追従させる ---
   const prev = useRef({ index: -1, revealed: false, playing: false });
