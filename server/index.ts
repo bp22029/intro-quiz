@@ -100,7 +100,8 @@ let resumeAt = 0; // epoch ms。この時刻までは buzz を受け付けない
 let resumeTimer: NodeJS.Timeout | null = null;
 
 // 正解発表の溜め。「正解は…」を出してから答えを見せるまでの間。
-const REVEAL_SUSPENSE_MS = 2000;
+// 当日その場で調整できるよう、管理画面から変更できる。
+let suspenseMs = 2000;
 let revealAt = 0; // epoch ms。この時刻に revealed が true になる
 let revealTimer: NodeJS.Timeout | null = null;
 
@@ -131,6 +132,7 @@ function snapshot(): State {
     players: [...players.values()],
     songs,
     ytStatus,
+    suspenseMs,
     round: {
       index,
       revealed,
@@ -350,14 +352,21 @@ io.on("connection", (socket) => {
     playing = false;
     revealed = false;
     // まず「正解は…」を出し、溜めてから答えを見せる
-    revealAt = Date.now() + REVEAL_SUSPENSE_MS;
+    if (suspenseMs <= 0) {
+      // 溜めなし。すぐ答えを出す
+      revealed = true;
+      console.log("[host] reveal（溜めなし）");
+      broadcastState();
+      return;
+    }
+    revealAt = Date.now() + suspenseMs;
     revealTimer = setTimeout(() => {
       revealed = true;
       revealAt = 0;
       revealTimer = null;
       console.log("[host] reveal（答え表示）");
       broadcastState();
-    }, REVEAL_SUSPENSE_MS);
+    }, suspenseMs);
     console.log("[host] reveal（溜め開始）");
     broadcastState();
   });
@@ -410,6 +419,15 @@ io.on("connection", (socket) => {
     console.log(`[host] clearPlayers: ${before}人を消去`);
     broadcastState();
     io.emit("rejoin"); // 生きている参加者には入り直してもらう
+  });
+
+  /** 「正解は…」の長さを変える。当日の進行に合わせて調整できるように */
+  socket.on("host:setSuspense", (raw: unknown) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return;
+    suspenseMs = Math.max(0, Math.min(10000, Math.round(n)));
+    console.log(`[host] suspense=${suspenseMs}ms`);
+    broadcastState();
   });
 
   socket.on("host:play", () => {

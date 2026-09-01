@@ -56,6 +56,37 @@ await wait(D);
 check("管理画面の曲送りが投影画面に伝わる", screen.lastState.round.index === 2);
 check("曲送りで答え表示が消える", screen.lastState.round.revealed === false);
 
+// --- 溜めの長さを変えられる ---
+host.emit("host:setSuspense", 500);
+await wait(D);
+check("溜めの長さを変えられる", screen.lastState.suspenseMs === 500);
+host.emit("host:reveal");
+await wait(900);
+check("短い溜めなら早く答えが出る", screen.lastState.round.revealed === true);
+
+host.emit("host:setSuspense", 0);
+await wait(D);
+host.emit("host:setSong", 2);
+await wait(D);
+host.emit("host:reveal");
+await wait(D);
+check("0秒なら溜めずにすぐ答えが出る", screen.lastState.round.revealed === true);
+
+host.emit("host:setSuspense", 99999);
+await wait(D);
+check("上限を超える値は丸められる", screen.lastState.suspenseMs === 10000);
+host.emit("host:setSuspense", -100);
+await wait(D);
+check("負の値は0に丸められる", screen.lastState.suspenseMs === 0);
+host.emit("host:setSuspense", "abc");
+await wait(D);
+check("数値でない値は無視される", screen.lastState.suspenseMs === 0);
+
+// 既定の2秒に戻して以降のテストを続ける
+host.emit("host:setSuspense", 2000);
+host.emit("host:setSong", 2);
+await wait(D);
+
 // --- 正解発表の溜め（「正解は…」）と答え表示 ---
 host.emit("host:reveal");
 await wait(D);

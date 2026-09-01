@@ -24,6 +24,7 @@ export type State = {
   mode: PlayMode;
   songs: Song[]; // 管理画面から編集できるので state に載せる（参加者には空で配る）
   ytStatus: { ready: boolean; readyCount: number; total: number };
+  suspenseMs: number; // 「正解は…」の長さ（ミリ秒）
 };
 
 export type JoinAck = { ok: true; id: string; name: string };

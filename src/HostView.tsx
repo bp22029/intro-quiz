@@ -23,6 +23,7 @@ const EMPTY: State = {
   mode: "manual",
   songs: [],
   ytStatus: { ready: false, readyCount: 0, total: 0 },
+  suspenseMs: 2000,
 };
 
 export default function HostView() {
@@ -37,6 +38,12 @@ export default function HostView() {
   // 2回目以降は開いたタブの location を差し替えて再生位置だけ移す。
   const playerWin = useRef<Window | null>(null);
   const [playerOpen, setPlayerOpen] = useState(false);
+  // 「正解」を押してからサビを鳴らすまでの待ち時間（秒）。
+  // YouTube の読み込みぶん早めに投げたいので、溜めとは別の値にしている。
+  const [chorusDelay, setChorusDelay] = useState(() => {
+    const saved = Number(localStorage.getItem(CHORUS_DELAY_KEY));
+    return Number.isFinite(saved) && saved >= 0 ? saved : 2;
+  });
 
   /** 指定秒から曲を鳴らす。既にタブがあればフォーカスを奪わない */
   const playAt = useCallback((videoId: string, sec: number) => {
@@ -248,9 +255,10 @@ export default function HostView() {
             if (autoChorus && mode === "manual" && song?.videoId) {
               const sec = song.chorusSec ?? song.startSec;
               const w = playerWin.current;
-              if (w && !w.closed) {
-                // タブが既にあれば、投影の「正解は…」が明けるのに合わせて鳴らす
-                setTimeout(() => playAt(song.videoId, sec), SUSPENSE_MS);
+              const delayMs = Math.round(chorusDelay * 1000);
+              if (w && !w.closed && delayMs > 0) {
+                // タブが既にあれば、指定した秒数だけ待ってから鳴らす
+                setTimeout(() => playAt(song.videoId, sec), delayMs);
               } else {
                 // タブが無いときはクリック起点でないと開けないので、すぐ開く
                 playAt(song.videoId, sec);
@@ -294,6 +302,52 @@ export default function HostView() {
         >
           次の問題 ›
         </Btn>
+      </div>
+
+      {/* 演出の調整。当日その場で耳と目を合わせられるようにする */}
+      <div className="rounded-2xl bg-neutral-900 p-4">
+        <div className="pb-3 text-neutral-400">演出の調整</div>
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2">
+            <span className="text-sm text-neutral-400">「正解は…」の長さ</span>
+            <input
+              type="number"
+              step="0.5"
+              min="0"
+              max="10"
+              value={state.suspenseMs / 1000}
+              onChange={(e) =>
+                socket.emit("host:setSuspense", Number(e.target.value) * 1000)
+              }
+              className="w-20 rounded-lg bg-neutral-800 px-3 py-2 text-center text-neutral-100 outline-none focus:ring-2 focus:ring-sky-600"
+            />
+            <span className="text-sm text-neutral-500">秒</span>
+          </label>
+
+          {mode === "manual" && (
+            <label className="flex items-center gap-2">
+              <span className="text-sm text-neutral-400">サビを鳴らすまで</span>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                max="10"
+                value={chorusDelay}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.min(10, Number(e.target.value)));
+                  setChorusDelay(v);
+                  localStorage.setItem(CHORUS_DELAY_KEY, String(v));
+                }}
+                className="w-20 rounded-lg bg-neutral-800 px-3 py-2 text-center text-neutral-100 outline-none focus:ring-2 focus:ring-amber-600"
+              />
+              <span className="text-sm text-neutral-500">秒</span>
+            </label>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-neutral-600">
+          どちらも「正解」を押した時点からの秒数です。YouTube の読み込みぶん音が遅れるので、
+          サビは投影より早めに投げると揃います。
+        </p>
       </div>
 
       {/* 参加者 */}
@@ -675,8 +729,8 @@ export function ytUrl(videoId: string, sec: number): string {
 /** 曲再生用のタブ。同じ名前を使うことでタブが増え続けないようにする */
 const YT_TAB = "introquiz-player";
 
-/** 正解発表の溜め。server/index.ts の REVEAL_SUSPENSE_MS と揃えること */
-const SUSPENSE_MS = 2000;
+/** サビ再生までの待ち時間の保存先。端末ごとに覚えておく */
+const CHORUS_DELAY_KEY = "introquiz:chorusDelay";
 
 function Field({
   label,

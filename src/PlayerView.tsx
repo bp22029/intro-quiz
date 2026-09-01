@@ -43,6 +43,7 @@ const EMPTY: State = {
   mode: "manual",
   songs: [],
   ytStatus: { ready: false, readyCount: 0, total: 0 },
+  suspenseMs: 2000,
 };
 
 export default function PlayerView() {

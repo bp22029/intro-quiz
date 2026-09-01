@@ -31,3 +31,30 @@ button {
   display: block;
   border: 0;
 }
+
+/* 正解表示。文字がゆっくり浮かび上がる */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise {
+  animation: riseIn 1s cubic-bezier(0.16, 0.84, 0.3, 1) both;
+}
+.rise-1 { animation-delay: 0.15s; }
+.rise-2 { animation-delay: 0.55s; }
+.rise-3 { animation-delay: 1s; }
+.rise-4 { animation-delay: 1.5s; }
+
+/* 動きを減らす設定の端末では出さない */
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
+}

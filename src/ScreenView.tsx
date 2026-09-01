@@ -23,6 +23,7 @@ const EMPTY: State = {
   mode: "manual",
   songs: [],
   ytStatus: { ready: false, readyCount: 0, total: 0 },
+  suspenseMs: 2000,
 };
 
 export default function ScreenView() {
@@ -214,21 +215,22 @@ export default function ScreenView() {
             </div>
           </div>
         ) : revealed ? (
-          <div className="text-center">
-            <div className="mb-4 text-3xl tracking-[0.4em] text-neutral-500">
+          // key に問題番号を入れて、曲が変わるたびにアニメーションをやり直させる
+          <div className="text-center" key={`answer-${index}`}>
+            <div className="rise rise-1 mb-4 text-3xl tracking-[0.4em] text-neutral-500">
               こたえ
             </div>
-            <div className="break-all text-[8vw] font-black leading-[1.05]">
+            <div className="rise rise-2 break-all text-[8vw] font-black leading-[1.05]">
               {song?.title ?? "-"}
             </div>
-            <div className="mt-4 text-[4vw] font-bold leading-tight text-neutral-300">
+            <div className="rise rise-3 mt-4 text-[4vw] font-bold leading-tight text-neutral-300">
               {song?.artist ?? ""}
             </div>
-            <div className="mt-10 inline-block rounded-2xl bg-amber-400 px-10 py-4 text-[2.8vw] font-black text-neutral-900">
+            <div className="rise rise-4 mt-10 inline-block rounded-2xl bg-amber-400 px-10 py-4 text-[2.8vw] font-black text-neutral-900">
               {song?.owner ?? "?"} さんの推し曲
             </div>
             {buzzed && (
-              <div className="mt-8 text-4xl text-emerald-400">
+              <div className="rise rise-4 mt-8 text-4xl text-emerald-400">
                 正解者: {buzzed.name} さん
               </div>
             )}
