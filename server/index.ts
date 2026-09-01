@@ -365,6 +365,24 @@ io.on("connection", (socket) => {
     broadcastState();
   });
 
+  /**
+   * 参加者を全消しする。テストで入った人が残っているときの掃除用。
+   * 実際にまだ繋がっている人は rejoin で戻ってくるので、
+   * 「もう居ない人だけが消える」結果になる。
+   */
+  socket.on("host:clearPlayers", () => {
+    const before = players.size;
+    players.clear();
+    socketToClient.clear();
+    lockedIds.clear();
+    lockedNames.clear();
+    buzzedBy = null;
+    clearWrong();
+    console.log(`[host] clearPlayers: ${before}人を消去`);
+    broadcastState();
+    io.emit("rejoin"); // 生きている参加者には入り直してもらう
+  });
+
   socket.on("host:play", () => {
     playing = true;
     broadcastState();

@@ -77,16 +77,23 @@ export default function PlayerView() {
     };
     const onDisconnect = () => setConnected(false);
     const onState = (s: State) => setState(s);
+    // 司会が参加者を一括クリアしたとき、まだ繋がっている人は入り直す
+    const onRejoin = () => {
+      const n = nameRef.current;
+      if (n) socket.emit("join", { name: n, clientId }, (_ack: JoinAck) => {});
+    };
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("state", onState);
+    socket.on("rejoin", onRejoin);
     if (socket.connected) onConnect();
 
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("state", onState);
+      socket.off("rejoin", onRejoin);
     };
   }, []);
 

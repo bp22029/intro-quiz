@@ -284,8 +284,25 @@ export default function HostView() {
 
       {/* 参加者 */}
       <div className="rounded-2xl bg-neutral-900 p-4">
-        <div className="pb-1 text-neutral-400">
-          参加者 {state.players.length}人
+        <div className="flex items-center justify-between pb-1">
+          <span className="text-neutral-400">参加者 {state.players.length}人</span>
+          <button
+            onClick={(e) => {
+              e.currentTarget.blur();
+              // 取り返しがつかない操作なので必ず確認する
+              const ok = window.confirm(
+                `参加者 ${state.players.length}人 をすべて消します。\n` +
+                  `お手つきの記録も消えます。\n\n` +
+                  `いま繋がっている人は自動で入り直すので、\n` +
+                  `もう居ない人だけが消えます。\n\n実行しますか？`,
+              );
+              if (ok) socket.emit("host:clearPlayers");
+            }}
+            disabled={state.players.length === 0}
+            className="rounded-lg border border-red-800 px-3 py-1 text-sm text-red-300 hover:bg-red-950 disabled:opacity-30"
+          >
+            全員クリア
+          </button>
         </div>
         <div className="pb-2 text-xs text-neutral-600">
           名前をクリックするとお手つきを付け外しできます（別ブラウザで参加し直した人への対処用）
