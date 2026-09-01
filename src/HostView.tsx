@@ -1,7 +1,7 @@
 // 管理画面。手元のノートPCで開き、クリックで進行する。
 // ノートPCの左半分に置き、右半分で YouTube を手動再生する想定なので、
 // 幅が狭くても崩れないレイアウトにしている。
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { beep, unlockAudio } from "./beep";
 import { socket } from "./socket";
 import { useCountdown } from "./useCountdown";
@@ -31,6 +31,24 @@ export default function HostView() {
   const [armed, setArmed] = useState(false); // 音声解除済みか
   // 正解時にサビをブラウザの別タブで自動再生するか（手動モード用）
   const [autoChorus, setAutoChorus] = useState(true);
+  // 曲再生用タブへの参照。window.open は必ずフォーカスを奪うので、
+  // 2回目以降は開いたタブの location を差し替えて再生位置だけ移す。
+  const playerWin = useRef<Window | null>(null);
+  const [playerOpen, setPlayerOpen] = useState(false);
+
+  /** 指定秒から曲を鳴らす。既にタブがあればフォーカスを奪わない */
+  const playAt = useCallback((videoId: string, sec: number) => {
+    if (!videoId) return;
+    const url = ytUrl(videoId, sec);
+    const w = playerWin.current;
+    if (w && !w.closed) {
+      w.location.href = url; // タブは切り替わらない
+    } else {
+      playerWin.current = window.open(url, YT_TAB);
+      setPlayerOpen(!!playerWin.current);
+    }
+    window.focus(); // 管理画面にフォーカスを戻す
+  }, []);
 
   const songs = state.songs;
   const { index, revealed, playing, wrongName, resumeInMs } = state.round;
@@ -139,19 +157,22 @@ export default function HostView() {
           {song?.owner ? `${song.owner} さんの推し曲` : ""}
         </div>
         {song && song.videoId && (
-          // 手動再生用。t= で再生開始位置を指定できるので、イントロとサビを別リンクにする
-          <div className="mt-3 flex flex-wrap gap-2">
-            <YtLink
-              videoId={song.videoId}
-              sec={song.startSec}
+          // 手動再生用。t= で再生開始位置を指定できるので、イントロとサビを別操作にする
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <YtBtn
+              onClick={() => playAt(song.videoId, song.startSec)}
               label={`▶ イントロ (${song.startSec}秒〜)`}
             />
-            <YtLink
-              videoId={song.videoId}
-              sec={song.chorusSec ?? song.startSec}
+            <YtBtn
+              onClick={() =>
+                playAt(song.videoId, song.chorusSec ?? song.startSec)
+              }
               label={`♪ サビ (${song.chorusSec ?? song.startSec}秒〜)`}
               accent
             />
+            <span className="text-xs text-neutral-500">
+              {playerOpen ? "再生タブと接続中" : "初回のみタブが切り替わります"}
+            </span>
           </div>
         )}
         {song && !song.videoId && (
@@ -179,12 +200,25 @@ export default function HostView() {
               checked={autoChorus}
               onChange={(e) => setAutoChorus(e.target.checked)}
             />
-            <span>
+            <span className="flex-1">
               正解時にサビを別タブで自動再生する
               <span className="block text-xs text-neutral-500">
-                同じタブを使い回すので、タブは増えません
+                同じタブを使い回すので、以降タブは切り替わりません
               </span>
             </span>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.currentTarget.blur();
+                // 開演前に1回押しておけば、本番中にタブが切り替わらない
+                playerWin.current = window.open("about:blank", YT_TAB);
+                setPlayerOpen(!!playerWin.current);
+                window.focus();
+              }}
+              className="rounded-lg border border-neutral-600 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
+            >
+              {playerOpen ? "再生タブ ✓" : "再生タブを用意"}
+            </button>
           </label>
         )}
 
@@ -195,10 +229,7 @@ export default function HostView() {
             // クリック起点でないとポップアップブロックに引っかかるので、
             // state の変化を待たずにここで開く
             if (autoChorus && mode === "manual" && song?.videoId) {
-              window.open(
-                ytUrl(song.videoId, song.chorusSec ?? song.startSec),
-                YT_TAB,
-              );
+              playAt(song.videoId, song.chorusSec ?? song.startSec);
             }
           }}
           disabled={revealed}
@@ -345,23 +376,22 @@ export default function HostView() {
   );
 }
 
-/** 指定秒から始まる YouTube のリンク。t= が再生開始位置になる */
-function YtLink({
-  videoId,
-  sec,
+/** 指定秒から曲を鳴らすボタン。再生タブを使い回すので、2回目以降はタブが切り替わらない */
+function YtBtn({
+  onClick,
   label,
   accent,
 }: {
-  videoId: string;
-  sec: number;
+  onClick: () => void;
   label: string;
   accent?: boolean;
 }) {
   return (
-    <a
-      href={ytUrl(videoId, sec)}
-      target={YT_TAB}
-      rel="noreferrer"
+    <button
+      onClick={(e) => {
+        e.currentTarget.blur();
+        onClick();
+      }}
       className={`rounded-lg px-3 py-2 text-base font-bold ${
         accent
           ? "bg-amber-500 text-neutral-900 hover:bg-amber-400"
@@ -369,7 +399,7 @@ function YtLink({
       }`}
     >
       {label}
-    </a>
+    </button>
   );
 }
 
