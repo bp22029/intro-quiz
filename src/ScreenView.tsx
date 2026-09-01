@@ -179,7 +179,7 @@ export default function ScreenView() {
           <>
             <div className="text-3xl text-neutral-300">
               {mode === "youtube"
-                ? `${yt.readyCount} / ${yt.total} 準備完了`
+                ? `動画の準備 ${yt.readyCount} / ${yt.total} 曲`
                 : "手動モード（YouTubeプレイヤーは使いません）"}
             </div>
             <div className="text-xl text-neutral-500">
@@ -261,7 +261,9 @@ export default function ScreenView() {
           {/* 再生モード表示（隅に常時） */}
           <div className="absolute right-4 top-3 text-lg text-neutral-400">
             {mode === "youtube" ? "YouTube モード" : "手動モード"}
-            {mode === "youtube" && !yt.ready && " (準備未完)"}
+            {mode === "youtube" &&
+              !yt.ready &&
+              ` (動画準備 ${yt.readyCount}/${yt.total}曲)`}
           </div>
           <div className="absolute left-4 top-3 text-lg text-neutral-400">
             第{index + 1}問 / {songs.length || "-"}
