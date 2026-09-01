@@ -3,10 +3,21 @@
 
 export type Player = { id: string; name: string };
 
+export type PlayMode = "youtube" | "manual";
+
+/** 進行状態。管理画面(/host)と投影画面(/screen)を分けたので、サーバーで共有する */
+export type Round = {
+  index: number; // 現在の問題番号（0始まり）
+  revealed: boolean; // 答えを表示中か
+  playing: boolean; // YouTubeモードで再生中か
+};
+
 export type State = {
   buzzedBy: Player | null; // 現在ボタンを押している人。null なら受付中
   lockedIds: string[]; // このラウンドで誤答した socket.id
   players: Player[]; // 参加者一覧
+  round: Round;
+  mode: PlayMode;
 };
 
 export type JoinAck = { ok: true; id: string; name: string };
@@ -20,5 +31,3 @@ export type Song = {
   startSec: number; // イントロ開始位置（秒）
   chorusSec?: number; // サビの開始位置（秒）。答え表示時にここへ飛んで再生する
 };
-
-export type PlayMode = "youtube" | "manual";

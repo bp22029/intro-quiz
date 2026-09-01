@@ -4,7 +4,13 @@ import type { JoinAck, State } from "./types";
 
 const NAME_KEY = "introquiz:name";
 
-const EMPTY: State = { buzzedBy: null, lockedIds: [], players: [] };
+const EMPTY: State = {
+  buzzedBy: null,
+  lockedIds: [],
+  players: [],
+  round: { index: 0, revealed: false, playing: false },
+  mode: "manual",
+};
 
 export default function PlayerView() {
   const [name, setName] = useState<string | null>(null);
