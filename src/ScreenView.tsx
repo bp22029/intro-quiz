@@ -164,8 +164,9 @@ export default function ScreenView() {
               : "bg-neutral-950"
         }`}
       >
+        {/* 全問数は出さない。あと何問あるかを客席に見せないため */}
         <div className="absolute left-8 top-6 text-2xl text-neutral-500">
-          第 {index + 1} 問 / 全 {songs.length || "-"} 問
+          第 {index + 1} 問
         </div>
 
         {showWrong ? (

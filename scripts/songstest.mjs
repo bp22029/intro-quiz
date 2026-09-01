@@ -75,6 +75,27 @@ await wait(D);
 check("負の秒数は0に丸められる", screen.lastState.songs[0].startSec === 0);
 check("数値でないサビ秒は0に丸められる", screen.lastState.songs[0].chorusSec === 0);
 
+// 8曲まで扱えるか（当日の想定曲数）
+const eight = Array.from({ length: 8 }, (_, i) => ({
+  videoId: `vid${i}0000`,
+  title: `第${i + 1}曲`,
+  artist: `アーティスト${i + 1}`,
+  owner: `提供者${i + 1}`,
+  startSec: i,
+  chorusSec: 30 + i,
+}));
+host.emit("host:setSongs", eight);
+await wait(D);
+check("8曲を登録できる", screen.lastState.songs.length === 8);
+check("8曲目の内容が正しい", screen.lastState.songs[7].title === "第8曲");
+check("8曲目のサビ秒が正しい", screen.lastState.songs[7].chorusSec === 37);
+
+host.emit("host:setSong", 7);
+await wait(D);
+check("8問目まで進める", screen.lastState.round.index === 7);
+host.emit("host:setSong", 0);
+await wait(D);
+
 // 後片付け: 元の曲リストへ戻す
 host.emit("host:setSongs", original);
 host.emit("host:setSong", 0);
