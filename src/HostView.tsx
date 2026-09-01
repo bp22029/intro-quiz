@@ -29,6 +29,8 @@ export default function HostView() {
   const [draft, setDraft] = useState<Song[] | null>(null);
   const [connected, setConnected] = useState(socket.connected);
   const [armed, setArmed] = useState(false); // 音声解除済みか
+  // 正解時にサビをブラウザの別タブで自動再生するか（手動モード用）
+  const [autoChorus, setAutoChorus] = useState(true);
 
   const songs = state.songs;
   const { index, revealed, playing, wrongName, resumeInMs } = state.round;
@@ -170,14 +172,35 @@ export default function HostView() {
             {playing ? "⏸ 一時停止" : "▶ イントロ再生"}
           </Btn>
         ) : (
-          <div className="col-span-2 rounded-xl border border-dashed border-neutral-700 px-4 py-3 text-center text-neutral-500">
-            曲は右half の YouTube で手動再生してください
-          </div>
+          <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-neutral-700 px-4 py-3 text-neutral-300">
+            <input
+              type="checkbox"
+              className="h-5 w-5"
+              checked={autoChorus}
+              onChange={(e) => setAutoChorus(e.target.checked)}
+            />
+            <span>
+              正解時にサビを別タブで自動再生する
+              <span className="block text-xs text-neutral-500">
+                同じタブを使い回すので、タブは増えません
+              </span>
+            </span>
+          </label>
         )}
 
         <Btn
           tone="green"
-          onClick={() => socket.emit("host:reveal")}
+          onClick={() => {
+            socket.emit("host:reveal");
+            // クリック起点でないとポップアップブロックに引っかかるので、
+            // state の変化を待たずにここで開く
+            if (autoChorus && mode === "manual" && song?.videoId) {
+              window.open(
+                ytUrl(song.videoId, song.chorusSec ?? song.startSec),
+                YT_TAB,
+              );
+            }
+          }}
           disabled={revealed}
         >
           ○ 正解・答えを出す
@@ -336,8 +359,8 @@ function YtLink({
 }) {
   return (
     <a
-      href={`https://www.youtube.com/watch?v=${videoId}&t=${Math.max(0, Math.floor(sec))}s`}
-      target="_blank"
+      href={ytUrl(videoId, sec)}
+      target={YT_TAB}
       rel="noreferrer"
       className={`rounded-lg px-3 py-2 text-base font-bold ${
         accent
@@ -466,9 +489,12 @@ function SongEditor({
             onChange={(v) => update(i, { owner: v })}
           />
           <Field
-            label="動画ID（URLを貼ってもOK）"
+            label="動画ID（t= 付きURLを貼るとサビ秒も取り込みます）"
             value={s.videoId}
-            onChange={(v) => update(i, { videoId: extractVideoId(v) })}
+            onChange={(v) => {
+              const { videoId, t } = parseYouTube(v);
+              update(i, t !== null ? { videoId, chorusSec: t } : { videoId });
+            }}
           />
           <div className="flex gap-2">
             <Field
@@ -539,15 +565,43 @@ function SongEditor({
   );
 }
 
-/** URL を貼られても動画IDだけ取り出す */
-function extractVideoId(input: string): string {
+/**
+ * URL から動画IDと再生開始位置を取り出す。
+ * `?t=66` `?t=1m6s` `&start=66` に対応する。t が無ければ null。
+ */
+export function parseYouTube(input: string): { videoId: string; t: number | null } {
   const v = input.trim();
-  const m =
+  const idMatch =
     v.match(/[?&]v=([A-Za-z0-9_-]{5,})/) ??
     v.match(/youtu\.be\/([A-Za-z0-9_-]{5,})/) ??
     v.match(/\/embed\/([A-Za-z0-9_-]{5,})/);
-  return (m ? m[1] : v).slice(0, 40);
+  const videoId = (idMatch ? idMatch[1] : v).slice(0, 40);
+
+  const tMatch = v.match(/[?&](?:t|start)=([0-9hms]+)/i);
+  let t: number | null = null;
+  if (tMatch) {
+    const raw = tMatch[1];
+    if (/^\d+$/.test(raw)) {
+      t = Number(raw);
+    } else {
+      // 1m6s / 2h3m4s のような形式
+      const h = Number(raw.match(/(\d+)h/)?.[1] ?? 0);
+      const m = Number(raw.match(/(\d+)m/)?.[1] ?? 0);
+      const sec = Number(raw.match(/(\d+)s/)?.[1] ?? 0);
+      t = h * 3600 + m * 60 + sec;
+    }
+  }
+  return { videoId, t };
 }
+
+/** 指定秒から始まる YouTube の URL を作る */
+export function ytUrl(videoId: string, sec: number): string {
+  const t = Math.max(0, Math.floor(sec));
+  return `https://www.youtube.com/watch?v=${videoId}&t=${t}s&autoplay=1`;
+}
+
+/** 曲再生用のタブ。同じ名前を使うことでタブが増え続けないようにする */
+const YT_TAB = "introquiz-player";
 
 function Field({
   label,
