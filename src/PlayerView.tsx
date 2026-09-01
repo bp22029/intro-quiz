@@ -40,6 +40,7 @@ const EMPTY: State = {
     resumeInMs: 0,
   },
   mode: "manual",
+  songs: [],
 };
 
 export default function PlayerView() {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { beep, unlockAudio } from "./beep";
 import { socket } from "./socket";
-import type { Song, State } from "./types";
+import type { State } from "./types";
 import { useCountdown } from "./useCountdown";
 import { useYouTube, ytErrorMessage } from "./useYouTube";
 
@@ -20,10 +20,10 @@ const EMPTY: State = {
     resumeInMs: 0,
   },
   mode: "manual",
+  songs: [],
 };
 
 export default function ScreenView() {
-  const [songs, setSongs] = useState<Song[]>([]);
   const [state, setState] = useState<State>(EMPTY);
   const [url, setUrl] = useState<string>(window.location.origin);
   const [ready, setReady] = useState(false); // 「準備」クリック済みか
@@ -31,15 +31,12 @@ export default function ScreenView() {
 
   const { index, revealed, playing, wrongName, resumeInMs } = state.round;
   const mode = state.mode;
+  const songs = state.songs;
   const song = songs[index];
 
   const yt = useYouTube(songs, mode === "youtube");
 
   useEffect(() => {
-    fetch("/songs.json")
-      .then((r) => r.json())
-      .then((d: Song[]) => setSongs(Array.isArray(d) ? d : []))
-      .catch(() => setSongs([]));
     fetch("/api/url")
       .then((r) => r.json())
       .then((d: { url: string }) => d.url && setUrl(d.url))

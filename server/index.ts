@@ -1,9 +1,10 @@
 import express from "express";
+import fs from "fs";
 import http from "http";
 import path from "path";
 import QRCode from "qrcode";
 import { Server } from "socket.io";
-import type { JoinAck, PlayMode, Player, State } from "../src/types";
+import type { JoinAck, PlayMode, Player, Song, State } from "../src/types";
 
 // ---------------------------------------------------------------------------
 // 状態（すべてプロセスメモリ。永続化しない。単一インスタンス前提）
@@ -33,6 +34,55 @@ let revealed = false;
 let playing = false;
 let mode: PlayMode = "manual";
 
+// 曲リスト。管理画面から編集できるようにメモリで保持する。
+// DBを持たない方針なので、プロセスが再起動すると songs.json の内容に戻る。
+const MAX_SONGS = 50;
+
+function sanitizeSong(raw: unknown): Song | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const str = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
+  const num = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  };
+  const title = str(o.title, 60);
+  const videoId = str(o.videoId, 40);
+  if (!title && !videoId) return null; // 空行は捨てる
+  return {
+    videoId,
+    title: title || "（曲名未設定）",
+    artist: str(o.artist, 60),
+    owner: str(o.owner, 30),
+    startSec: num(o.startSec),
+    chorusSec: num(o.chorusSec),
+  };
+}
+
+function loadSongsFromDisk(): Song[] {
+  // ビルド後は dist/songs.json、開発時は public/songs.json にある
+  const candidates = [
+    path.join(__dirname, "../dist/songs.json"),
+    path.join(__dirname, "../public/songs.json"),
+  ];
+  for (const file of candidates) {
+    try {
+      const arr = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (Array.isArray(arr)) {
+        const songs = arr.map(sanitizeSong).filter((s): s is Song => s !== null);
+        console.log(`[songs] ${file} から ${songs.length}曲 読み込み`);
+        return songs.slice(0, MAX_SONGS);
+      }
+    } catch {
+      // 次の候補を試す
+    }
+  }
+  console.warn("[songs] songs.json を読み込めませんでした");
+  return [];
+}
+
+let songs: Song[] = loadSongsFromDisk();
+
 // お手つき演出。「不正解」を出してから受付を再開するまでの待ち時間。
 const WRONG_COUNTDOWN_MS = 3000;
 let wrongName: string | null = null;
@@ -55,6 +105,7 @@ function snapshot(): State {
     lockedIds: [...lockedIds],
     lockedNames: [...lockedNames],
     players: [...players.values()],
+    songs,
     round: {
       index,
       revealed,
@@ -250,6 +301,20 @@ io.on("connection", (socket) => {
       lockedNames.add(player.name);
       console.log(`[host] lock ${player.name}`);
     }
+    broadcastState();
+  });
+
+  /** 管理画面から曲リストをまるごと差し替える */
+  socket.on("host:setSongs", (raw: unknown) => {
+    if (!Array.isArray(raw)) return;
+    const next = raw
+      .slice(0, MAX_SONGS)
+      .map(sanitizeSong)
+      .filter((s): s is Song => s !== null);
+    songs = next;
+    // 曲が減って現在位置がはみ出した場合に備えて丸める
+    if (index >= songs.length) index = Math.max(0, songs.length - 1);
+    console.log(`[host] setSongs ${songs.length}曲`);
     broadcastState();
   });
 

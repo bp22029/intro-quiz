@@ -20,14 +20,17 @@ const EMPTY: State = {
     resumeInMs: 0,
   },
   mode: "manual",
+  songs: [],
 };
 
 export default function HostView() {
-  const [songs, setSongs] = useState<Song[]>([]);
   const [state, setState] = useState<State>(EMPTY);
+  // 編集用の下書き。入力中にサーバーからの更新で上書きされないよう分けている。
+  const [draft, setDraft] = useState<Song[] | null>(null);
   const [connected, setConnected] = useState(socket.connected);
   const [armed, setArmed] = useState(false); // 音声解除済みか
 
+  const songs = state.songs;
   const { index, revealed, playing, wrongName, resumeInMs } = state.round;
   const mode = state.mode;
   const song = songs[index];
@@ -35,13 +38,6 @@ export default function HostView() {
   const last = songs.length - 1;
   const countdown = useCountdown(resumeInMs);
   const showWrong = wrongName !== null;
-
-  useEffect(() => {
-    fetch("/songs.json")
-      .then((r) => r.json())
-      .then((d: Song[]) => setSongs(Array.isArray(d) ? d : []))
-      .catch(() => setSongs([]));
-  }, []);
 
   useEffect(() => {
     const onState = (s: State) => setState(s);
@@ -257,26 +253,65 @@ export default function HostView() {
 
       {/* 曲の一覧。飛びたい問題を直接選べる */}
       <div className="rounded-2xl bg-neutral-900 p-4">
-        <div className="pb-2 text-neutral-400">問題一覧</div>
-        <ul className="flex flex-col gap-1">
-          {songs.map((s, i) => (
-            <li key={i}>
-              <button
-                onClick={(e) => {
-                  e.currentTarget.blur();
-                  socket.emit("host:setSong", i);
-                }}
-                className={`w-full truncate rounded-lg px-3 py-2 text-left ${
-                  i === index
-                    ? "bg-sky-800 text-white"
-                    : "text-neutral-300 hover:bg-neutral-800"
-                }`}
-              >
-                {i + 1}. {s.title} / {s.artist}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="flex items-center justify-between pb-2">
+          <span className="text-neutral-400">問題一覧</span>
+          {draft === null ? (
+            <button
+              className="rounded-lg border border-neutral-700 px-3 py-1 text-sm text-neutral-300 hover:bg-neutral-800"
+              onClick={(e) => {
+                e.currentTarget.blur();
+                setDraft(songs.map((s) => ({ ...s })));
+              }}
+            >
+              ✎ 曲を編集
+            </button>
+          ) : (
+            <span className="text-sm text-amber-400">編集中（未反映）</span>
+          )}
+        </div>
+
+        {draft === null ? (
+          <ul className="flex flex-col gap-1">
+            {songs.map((s, i) => (
+              <li key={i}>
+                <button
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    socket.emit("host:setSong", i);
+                  }}
+                  className={`w-full rounded-lg px-3 py-2 text-left ${
+                    i === index
+                      ? "bg-sky-800 text-white"
+                      : "text-neutral-300 hover:bg-neutral-800"
+                  }`}
+                >
+                  <div className="truncate">
+                    {i + 1}. {s.title}
+                  </div>
+                  <div className="truncate text-sm text-neutral-400">
+                    {s.artist}
+                    {s.owner ? ` — ${s.owner} さんの推し曲` : ""}
+                  </div>
+                </button>
+              </li>
+            ))}
+            {songs.length === 0 && (
+              <li className="text-neutral-600">
+                曲がありません。「曲を編集」から追加してください
+              </li>
+            )}
+          </ul>
+        ) : (
+          <SongEditor
+            draft={draft}
+            setDraft={setDraft}
+            onApply={() => {
+              socket.emit("host:setSongs", draft);
+              setDraft(null);
+            }}
+            onCancel={() => setDraft(null)}
+          />
+        )}
       </div>
     </div>
   );
@@ -336,6 +371,200 @@ function Btn({
       className={`rounded-xl px-4 py-4 text-xl font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${tones[tone]} ${className}`}
     >
       {children}
+    </button>
+  );
+}
+
+/** 曲の追加・編集・並べ替え。下書きに対して操作し、「反映する」で初めてサーバーへ送る */
+function SongEditor({
+  draft,
+  setDraft,
+  onApply,
+  onCancel,
+}: {
+  draft: Song[];
+  setDraft: (s: Song[]) => void;
+  onApply: () => void;
+  onCancel: () => void;
+}) {
+  const update = (i: number, patch: Partial<Song>) =>
+    setDraft(draft.map((s, k) => (k === i ? { ...s, ...patch } : s)));
+
+  const move = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= draft.length) return;
+    const next = [...draft];
+    [next[i], next[j]] = [next[j], next[i]];
+    setDraft(next);
+  };
+
+  const remove = (i: number) => setDraft(draft.filter((_, k) => k !== i));
+
+  const add = () =>
+    setDraft([
+      ...draft,
+      { videoId: "", title: "", artist: "", owner: "", startSec: 0, chorusSec: 0 },
+    ]);
+
+  return (
+    <div className="flex flex-col gap-3">
+      {draft.map((s, i) => (
+        <div key={i} className="rounded-xl border border-neutral-700 p-3">
+          <div className="flex items-center gap-2 pb-2">
+            <span className="text-neutral-500">{i + 1}</span>
+            <div className="flex-1" />
+            <IconBtn onClick={() => move(i, -1)} disabled={i === 0} label="↑" />
+            <IconBtn
+              onClick={() => move(i, 1)}
+              disabled={i === draft.length - 1}
+              label="↓"
+            />
+            <IconBtn onClick={() => remove(i)} label="削除" danger />
+          </div>
+          <Field label="曲名" value={s.title} onChange={(v) => update(i, { title: v })} />
+          <Field
+            label="アーティスト"
+            value={s.artist}
+            onChange={(v) => update(i, { artist: v })}
+          />
+          <Field
+            label="推した人"
+            value={s.owner}
+            onChange={(v) => update(i, { owner: v })}
+          />
+          <Field
+            label="動画ID（URLを貼ってもOK）"
+            value={s.videoId}
+            onChange={(v) => update(i, { videoId: extractVideoId(v) })}
+          />
+          <div className="flex gap-2">
+            <Field
+              label="イントロ開始秒"
+              value={String(s.startSec)}
+              numeric
+              onChange={(v) => update(i, { startSec: Number(v) || 0 })}
+            />
+            <Field
+              label="サビ開始秒"
+              value={String(s.chorusSec ?? 0)}
+              numeric
+              onChange={(v) => update(i, { chorusSec: Number(v) || 0 })}
+            />
+          </div>
+        </div>
+      ))}
+
+      <button
+        onClick={(e) => {
+          e.currentTarget.blur();
+          add();
+        }}
+        className="rounded-xl border border-dashed border-neutral-600 py-3 text-neutral-300 hover:bg-neutral-800"
+      >
+        ＋ 曲を追加
+      </button>
+
+      <div className="flex gap-2">
+        <button
+          onClick={(e) => {
+            e.currentTarget.blur();
+            onApply();
+          }}
+          className="flex-1 rounded-xl bg-emerald-600 py-3 text-lg font-bold hover:bg-emerald-500"
+        >
+          反映する
+        </button>
+        <button
+          onClick={(e) => {
+            e.currentTarget.blur();
+            onCancel();
+          }}
+          className="rounded-xl border border-neutral-700 px-5 py-3 text-neutral-300 hover:bg-neutral-800"
+        >
+          やめる
+        </button>
+      </div>
+
+      <button
+        onClick={async (e) => {
+          e.currentTarget.blur();
+          const json = JSON.stringify(draft, null, 2);
+          try {
+            await navigator.clipboard.writeText(json);
+            alert(
+              "JSONをコピーしました。public/songs.json に貼り付けると、サーバー再起動後も残ります。",
+            );
+          } catch {
+            window.prompt("コピーして public/songs.json に貼り付けてください", json);
+          }
+        }}
+        className="rounded-xl border border-neutral-700 py-2 text-sm text-neutral-400 hover:bg-neutral-800"
+      >
+        JSONとしてコピー（songs.json に貼れば再起動後も残ります）
+      </button>
+    </div>
+  );
+}
+
+/** URL を貼られても動画IDだけ取り出す */
+function extractVideoId(input: string): string {
+  const v = input.trim();
+  const m =
+    v.match(/[?&]v=([A-Za-z0-9_-]{5,})/) ??
+    v.match(/youtu\.be\/([A-Za-z0-9_-]{5,})/) ??
+    v.match(/\/embed\/([A-Za-z0-9_-]{5,})/);
+  return (m ? m[1] : v).slice(0, 40);
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  numeric,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  numeric?: boolean;
+}) {
+  return (
+    <label className="mb-2 block">
+      <span className="text-xs text-neutral-500">{label}</span>
+      <input
+        className="w-full rounded-lg bg-neutral-800 px-3 py-2 text-neutral-100 outline-none focus:ring-2 focus:ring-sky-600"
+        value={value}
+        inputMode={numeric ? "numeric" : undefined}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+function IconBtn({
+  onClick,
+  label,
+  disabled,
+  danger,
+}: {
+  onClick: () => void;
+  label: string;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={(e) => {
+        e.currentTarget.blur();
+        onClick();
+      }}
+      disabled={disabled}
+      className={`rounded-lg border px-3 py-1 text-sm disabled:opacity-30 ${
+        danger
+          ? "border-red-800 text-red-300 hover:bg-red-950"
+          : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"
+      }`}
+    >
+      {label}
     </button>
   );
 }

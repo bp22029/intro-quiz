@@ -21,6 +21,7 @@ export type State = {
   players: Player[]; // 参加者一覧
   round: Round;
   mode: PlayMode;
+  songs: Song[]; // 管理画面から編集できるので state に載せて全画面へ配る
 };
 
 export type JoinAck = { ok: true; id: string; name: string };
