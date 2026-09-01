@@ -19,11 +19,39 @@ export default function ScreenView() {
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
+  const [toast, setToast] = useState<string | null>(null);
+
   const yt = useYouTube(songs, mode === "youtube");
 
   // キーボードハンドラから常に最新値を読むための ref
-  const r = useRef({ mode, index, playing, revealed, songs, yt, started });
-  r.current = { mode, index, playing, revealed, songs, yt, started };
+  const r = useRef({
+    mode,
+    index,
+    playing,
+    revealed,
+    songs,
+    yt,
+    started,
+    buzzedBy: state.buzzedBy,
+  });
+  r.current = {
+    mode,
+    index,
+    playing,
+    revealed,
+    songs,
+    yt,
+    started,
+    buzzedBy: state.buzzedBy,
+  };
+
+  // キー操作のフィードバック。押したのに何も起きないと当日操作を見失う。
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flash = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 1800);
+  }, []);
 
   // --- データ読み込み ---
   useEffect(() => {
@@ -66,33 +94,42 @@ export default function ScreenView() {
 
   // --- 操作 ---
 
-  const goToSong = useCallback((next: number) => {
-    const { songs: ss, mode: m, yt: y, index: cur } = r.current;
-    if (ss.length === 0) return;
-    const clamped = Math.max(0, Math.min(ss.length - 1, next));
-    if (m === "youtube") {
-      y.pause(cur);
-      y.seekToStart(clamped);
-    }
-    setIndex(clamped);
-    setRevealed(false);
-    setPlaying(false);
-    setElapsed(0);
-    socket.emit("host:nextRound");
-  }, []);
+  const goToSong = useCallback(
+    (next: number) => {
+      const { songs: ss, mode: m, yt: y, index: cur } = r.current;
+      if (ss.length === 0) return;
+      const clamped = Math.max(0, Math.min(ss.length - 1, next));
+      if (m === "youtube") {
+        y.pause(cur);
+        y.seekToStart(clamped);
+      }
+      setIndex(clamped);
+      setRevealed(false);
+      setPlaying(false);
+      setElapsed(0);
+      socket.emit("host:nextRound");
+      flash(`第${clamped + 1}問へ（お手つき全解除）`);
+    },
+    [flash],
+  );
 
   const togglePlay = useCallback(() => {
     // 手動モードでは再生位置に関する処理をすべて無効化する
-    if (r.current.mode !== "youtube") return;
+    if (r.current.mode !== "youtube") {
+      flash("手動モードでは再生操作は効きません");
+      return;
+    }
     const { yt: y, index: i, playing: p } = r.current;
     if (p) {
       y.pause(i);
       setPlaying(false);
+      flash("一時停止");
     } else {
       y.play(i);
       setPlaying(true);
+      flash("再生");
     }
-  }, []);
+  }, [flash]);
 
   const markCorrect = useCallback(() => {
     if (r.current.mode === "youtube") {
@@ -100,22 +137,36 @@ export default function ScreenView() {
     }
     setPlaying(false);
     setRevealed(true); // カバーを外して映像を見せる
-  }, []);
+    flash("正解！ 答えを表示");
+  }, [flash]);
 
   const markWrong = useCallback(() => {
+    // 誰も押していないときに誤答を出しても、サーバーは誰もロックしない。
+    // 画面が何も変わらず「無反応」に見えるので、ここで明示する。
+    const target = r.current.buzzedBy;
+    if (!target) {
+      flash("まだ誰も押していません");
+      return;
+    }
     socket.emit("host:wrong");
+    setRevealed(false); // 答えを出した後でも誤答に戻せるようにする
     if (r.current.mode === "youtube") {
       r.current.yt.play(r.current.index); // 続きから再生再開
       setPlaying(true);
     }
-  }, []);
+    flash(`お手つき: ${target.name} さん（受付再開）`);
+  }, [flash]);
 
   // --- キーボード（投影画面のみ） ---
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       // M（モード切替）だけは準備画面でも効かせる。手動に逃げる導線を塞がない。
       if (e.key === "m" || e.key === "M") {
-        setMode((m) => (m === "youtube" ? "manual" : "youtube"));
+        setMode((m) => {
+          const next = m === "youtube" ? "manual" : "youtube";
+          flash(next === "manual" ? "手動モードに切替" : "YouTubeモードに切替");
+          return next;
+        });
         setPlaying(false);
         return;
       }
@@ -134,6 +185,7 @@ export default function ScreenView() {
         case "r":
         case "R":
           socket.emit("host:reset");
+          flash("押下を取り消しました（ロックなし）");
           break;
         case "n":
         case "N":
@@ -151,7 +203,7 @@ export default function ScreenView() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, markCorrect, markWrong, goToSong]);
+  }, [togglePlay, markCorrect, markWrong, goToSong, flash]);
 
   const song = songs[index];
   const errorCodes = Object.entries(yt.errors);
@@ -246,6 +298,9 @@ export default function ScreenView() {
                   }`}
                 >
                   {p.name}
+                  {state.lockedIds.includes(p.id) && (
+                    <span className="ml-1 text-sm no-underline">お手つき</span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -331,6 +386,13 @@ export default function ScreenView() {
           )}
         </main>
       </div>
+
+      {/* 直前の操作の表示。押しても何も起きないと当日操作を見失うため */}
+      {toast && (
+        <div className="pointer-events-none fixed bottom-16 left-1/2 -translate-x-1/2 rounded-xl bg-neutral-100 px-8 py-3 text-3xl font-bold text-neutral-900 shadow-lg">
+          {toast}
+        </div>
+      )}
 
       {/* キー割り当て（常時表示） */}
       <footer className="flex flex-wrap justify-center gap-5 border-t border-neutral-800 px-4 py-2 text-base text-neutral-500">
