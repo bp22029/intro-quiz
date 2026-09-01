@@ -16,7 +16,8 @@ export type Round = {
 
 export type State = {
   buzzedBy: Player | null; // 現在ボタンを押している人。null なら受付中
-  lockedIds: string[]; // このラウンドで誤答した socket.id
+  lockedIds: string[]; // このラウンドで誤答した clientId
+  lockedNames: string[]; // このラウンドで誤答した名前。別ブラウザでの回避を抑える
   players: Player[]; // 参加者一覧
   round: Round;
   mode: PlayMode;

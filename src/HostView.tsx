@@ -10,6 +10,7 @@ import type { PlayMode, Song, State } from "./types";
 const EMPTY: State = {
   buzzedBy: null,
   lockedIds: [],
+  lockedNames: [],
   players: [],
   round: {
     index: 0,
@@ -217,23 +218,34 @@ export default function HostView() {
 
       {/* 参加者 */}
       <div className="rounded-2xl bg-neutral-900 p-4">
-        <div className="pb-2 text-neutral-400">
+        <div className="pb-1 text-neutral-400">
           参加者 {state.players.length}人
+        </div>
+        <div className="pb-2 text-xs text-neutral-600">
+          名前をクリックするとお手つきを付け外しできます（別ブラウザで参加し直した人への対処用）
         </div>
         <ul className="flex flex-wrap gap-2">
           {state.players.map((p) => {
-            const locked = state.lockedIds.includes(p.id);
+            const locked =
+                state.lockedIds.includes(p.id) ||
+                state.lockedNames.includes(p.name);
             return (
-              <li
-                key={p.id}
-                className={`rounded-lg px-2.5 py-1 ${
-                  locked
-                    ? "bg-neutral-950 text-neutral-600"
-                    : "bg-neutral-800 text-neutral-100"
-                }`}
-              >
-                {p.name}
-                {locked && <span className="ml-1 text-xs">お手つき</span>}
+              <li key={p.id}>
+                <button
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    socket.emit("host:toggleLock", p.id);
+                  }}
+                  title={locked ? "お手つきを解除する" : "お手つきにする" }
+                  className={`rounded-lg px-2.5 py-1 ${
+                    locked
+                      ? "bg-neutral-950 text-neutral-600 line-through"
+                      : "bg-neutral-800 text-neutral-100 hover:bg-neutral-700"
+                  }`}
+                >
+                  {p.name}
+                  {locked && <span className="ml-1 text-xs no-underline">お手つき</span>}
+                </button>
               </li>
             );
           })}

@@ -15,6 +15,10 @@ import type { JoinAck, PlayMode, Player, State } from "../src/types";
 const socketToClient = new Map<string, string>(); // socket.id -> clientId
 const players = new Map<string, Player>(); // clientId -> Player（Player.id は clientId）
 const lockedIds = new Set<string>(); // このラウンドで誤答した clientId
+// 名前でもロックする。clientId は localStorage 依存なので、別ブラウザで開き直すと
+// 別人になってしまう。完全な防止はログインなしには不可能だが、名前まで変えないと
+// 抜けられないようにしておく（名前の変更は投影画面に出るので周囲に気づかれる）。
+const lockedNames = new Set<string>();
 let buzzedBy: Player | null = null;
 
 /** 同じ clientId で開いている接続がまだ残っているか */
@@ -49,6 +53,7 @@ function snapshot(): State {
   return {
     buzzedBy,
     lockedIds: [...lockedIds],
+    lockedNames: [...lockedNames],
     players: [...players.values()],
     round: {
       index,
@@ -154,6 +159,7 @@ io.on("connection", (socket) => {
     if (lockedIds.has(clientId)) return; // このラウンドで誤答済み
     const player = players.get(clientId);
     if (!player) return; // 未 join
+    if (lockedNames.has(player.name)) return; // 同じ名前で誤答済み
 
     buzzedBy = player;
     playing = false; // 押されたら再生は止まる
@@ -175,6 +181,7 @@ io.on("connection", (socket) => {
   socket.on("host:wrong", () => {
     if (!buzzedBy) return; // 誰も押していなければ何もしない
     lockedIds.add(buzzedBy.id);
+    lockedNames.add(buzzedBy.name);
     console.log(`[host] wrong: ${buzzedBy.name} をロック`);
 
     // 「不正解」を出し、3秒のカウントダウン後に受付を再開する
@@ -199,6 +206,7 @@ io.on("connection", (socket) => {
     clearWrong();
     buzzedBy = null;
     lockedIds.clear();
+    lockedNames.clear();
     revealed = false;
     playing = false;
     console.log("[host] nextRound");
@@ -215,6 +223,7 @@ io.on("connection", (socket) => {
     playing = false;
     buzzedBy = null;
     lockedIds.clear();
+    lockedNames.clear();
     console.log(`[host] setSong ${n}`);
     broadcastState();
   });
@@ -224,6 +233,23 @@ io.on("connection", (socket) => {
     revealed = true;
     playing = false; // 投影画面側がサビ再生に切り替える
     console.log("[host] reveal");
+    broadcastState();
+  });
+
+  /** 司会が手動でロックを付け外しする。回避されたときの最終手段 */
+  socket.on("host:toggleLock", (rawId: unknown) => {
+    const cid = String(rawId ?? "");
+    const player = players.get(cid);
+    if (!player) return;
+    if (lockedIds.has(cid)) {
+      lockedIds.delete(cid);
+      lockedNames.delete(player.name);
+      console.log(`[host] unlock ${player.name}`);
+    } else {
+      lockedIds.add(cid);
+      lockedNames.add(player.name);
+      console.log(`[host] lock ${player.name}`);
+    }
     broadcastState();
   });
 

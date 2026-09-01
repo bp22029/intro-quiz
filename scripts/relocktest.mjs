@@ -72,6 +72,36 @@ a2.emit("buzz");
 await wait(D);
 check("名前を変えても押せない", host.lastState.buzzedBy === null);
 
+// ★別ブラウザ相当: clientId が全く違っても、同じ名前なら弾く
+const otherBrowser = await join("あきら", "test-device-A-safari");
+await wait(D);
+otherBrowser.emit("buzz");
+await wait(D);
+check(
+  "別ブラウザ(別clientId)でも同じ名前なら押せない",
+  host.lastState.buzzedBy === null,
+);
+
+// 司会が手動でロックを解除できる（最終手段）
+host.emit("host:toggleLock", CID_A);
+await wait(D);
+check("司会が手動でロックを解除できる", !host.lastState.lockedIds.includes(CID_A));
+a.emit("buzz");
+await wait(D);
+check("手動解除後は押せる", host.lastState.buzzedBy?.id === CID_A);
+
+// 司会が手動でロックを掛け直せる
+host.emit("host:reset");
+await wait(D);
+host.emit("host:toggleLock", CID_A);
+await wait(D);
+check("司会が手動でロックを掛けられる", host.lastState.lockedIds.includes(CID_A));
+a.emit("buzz");
+await wait(D);
+check("手動ロック後は押せない", host.lastState.buzzedBy === null);
+
+otherBrowser.close();
+
 // 他の人は普通に押せる
 b.emit("buzz");
 await wait(D);

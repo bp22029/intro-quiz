@@ -10,6 +10,7 @@ import { useYouTube, ytErrorMessage } from "./useYouTube";
 const EMPTY: State = {
   buzzedBy: null,
   lockedIds: [],
+  lockedNames: [],
   players: [],
   round: {
     index: 0,
@@ -135,7 +136,9 @@ export default function ScreenView() {
           </div>
           <ul className="flex flex-wrap gap-2">
             {state.players.map((p) => {
-              const locked = state.lockedIds.includes(p.id);
+              const locked =
+                state.lockedIds.includes(p.id) ||
+                state.lockedNames.includes(p.name);
               return (
                 <li
                   key={p.id}

@@ -30,6 +30,7 @@ const clientId = getClientId();
 const EMPTY: State = {
   buzzedBy: null,
   lockedIds: [],
+  lockedNames: [],
   players: [],
   round: {
     index: 0,
@@ -142,7 +143,9 @@ export default function PlayerView() {
   }
 
   const iAmBuzzed = !!myId && state.buzzedBy?.id === myId;
-  const iAmLocked = !!myId && state.lockedIds.includes(myId);
+  const iAmLocked =
+    (!!myId && state.lockedIds.includes(myId)) ||
+    state.lockedNames.includes(name);
   const someoneElse = !!state.buzzedBy && !iAmBuzzed;
 
   // 表示は state を素直に描くが、pressed のときだけローカル優先で先に殺す
