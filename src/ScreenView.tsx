@@ -148,13 +148,20 @@ export default function ScreenView() {
       flash("まだ誰も押していません");
       return;
     }
+    // 既に答えを出してしまった後は、曲を鳴らし直しても問題として成立しない。
+    // 受付だけ戻し、再生は再開しない。
+    const afterReveal = r.current.revealed;
     socket.emit("host:wrong");
-    setRevealed(false); // 答えを出した後でも誤答に戻せるようにする
-    if (r.current.mode === "youtube") {
+    setRevealed(false);
+    if (r.current.mode === "youtube" && !afterReveal) {
       r.current.yt.play(r.current.index); // 続きから再生再開
       setPlaying(true);
     }
-    flash(`お手つき: ${target.name} さん（受付再開）`);
+    flash(
+      afterReveal
+        ? `お手つき: ${target.name} さん（答え表示済みのため再生は再開しません）`
+        : `お手つき: ${target.name} さん（受付再開）`,
+    );
   }, [flash]);
 
   // --- キーボード（投影画面のみ） ---
@@ -314,47 +321,18 @@ export default function ScreenView() {
           }`}
         >
           {/* 再生モード表示（隅に常時） */}
-          <div className="absolute right-4 top-3 text-lg text-neutral-400">
+          <div className="absolute right-4 top-3 z-30 text-lg text-neutral-400">
             {mode === "youtube" ? "YouTube モード" : "手動モード"}
             {mode === "youtube" &&
               !yt.ready &&
               ` (動画準備 ${yt.readyCount}/${yt.total}曲)`}
           </div>
-          <div className="absolute left-4 top-3 text-lg text-neutral-400">
+          <div className="absolute left-4 top-3 z-30 text-lg text-neutral-400">
             第{index + 1}問 / {songs.length || "-"}
           </div>
 
-          {revealed ? (
-            <Answer song={song} buzzed={buzzed} />
-          ) : buzzed ? (
-            <div className="text-center">
-              <div className="text-4xl text-green-200">回答者</div>
-              <div className="break-all text-[11vw] font-black leading-none">
-                {buzzed.name}
-              </div>
-            </div>
-          ) : playing ? (
-            <div className="text-center">
-              <div className="text-[14vw] font-black leading-none tabular-nums">
-                {elapsed}
-              </div>
-              <div className="text-4xl text-neutral-400">秒経過</div>
-            </div>
-          ) : (
-            <div className="text-center">
-              <div className="text-[14vw] font-black leading-none">
-                第{index + 1}問
-              </div>
-              {mode === "manual" && (
-                <div className="mt-4 text-3xl text-neutral-400">
-                  手動で再生してください
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* YouTube プレイヤー領域。display:none にはしない（6.4） */}
-          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          {/* --- レイヤー0: YouTube プレイヤー。display:none にはしない（6.4） --- */}
+          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
             {songs.map((_, i) => (
               <div
                 key={i}
@@ -370,13 +348,46 @@ export default function ScreenView() {
             ))}
           </div>
 
-          {/* 目隠しカバー。正解表示のタイミングで外す */}
+          {/* --- レイヤー1: 目隠しカバー。正解表示（1キー）で外す --- */}
           {!revealed && (
-            <div className="pointer-events-none absolute inset-0 -z-[5] bg-neutral-950" />
+            <div className="pointer-events-none absolute inset-0 z-10 bg-neutral-950" />
+          )}
+
+          {/* --- レイヤー2: 表示内容 --- */}
+          {revealed ? (
+            // カバーを外して映像を見せる。答えは下部の帯に重ねる。
+            <div className="absolute inset-x-0 bottom-0 z-20 bg-black/75 px-8 py-6">
+              <Answer song={song} buzzed={buzzed} />
+            </div>
+          ) : buzzed ? (
+            <div className="relative z-20 text-center">
+              <div className="text-4xl text-green-200">回答者</div>
+              <div className="break-all text-[11vw] font-black leading-none">
+                {buzzed.name}
+              </div>
+            </div>
+          ) : playing ? (
+            <div className="relative z-20 text-center">
+              <div className="text-[14vw] font-black leading-none tabular-nums">
+                {elapsed}
+              </div>
+              <div className="text-4xl text-neutral-400">秒経過</div>
+            </div>
+          ) : (
+            <div className="relative z-20 text-center">
+              <div className="text-[14vw] font-black leading-none">
+                第{index + 1}問
+              </div>
+              {mode === "manual" && (
+                <div className="mt-4 text-3xl text-neutral-400">
+                  手動で再生してください
+                </div>
+              )}
+            </div>
           )}
 
           {errorCodes.length > 0 && (
-            <div className="absolute bottom-3 right-4 rounded-lg bg-red-950 px-4 py-2 text-lg text-red-300">
+            <div className="absolute bottom-3 right-4 z-30 rounded-lg bg-red-950 px-4 py-2 text-lg text-red-300">
               {errorCodes.map(([i, code]) => (
                 <div key={i}>
                   第{Number(i) + 1}問: {ytErrorMessage(Number(code))}
