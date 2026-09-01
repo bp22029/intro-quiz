@@ -136,20 +136,25 @@ export default function HostView() {
         <div className="mt-1 text-lg text-amber-300">
           {song?.owner ? `${song.owner} さんの推し曲` : ""}
         </div>
-        {song && (
-          <div className="mt-3 flex gap-4 text-sm text-neutral-500">
-            <span>イントロ {song.startSec}秒〜</span>
-            <span>サビ {song.chorusSec ?? song.startSec}秒〜</span>
-            {mode === "manual" && (
-              <a
-                className="text-sky-400 underline"
-                href={`https://www.youtube.com/watch?v=${song.videoId}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                YouTubeで開く
-              </a>
-            )}
+        {song && song.videoId && (
+          // 手動再生用。t= で再生開始位置を指定できるので、イントロとサビを別リンクにする
+          <div className="mt-3 flex flex-wrap gap-2">
+            <YtLink
+              videoId={song.videoId}
+              sec={song.startSec}
+              label={`▶ イントロ (${song.startSec}秒〜)`}
+            />
+            <YtLink
+              videoId={song.videoId}
+              sec={song.chorusSec ?? song.startSec}
+              label={`♪ サビ (${song.chorusSec ?? song.startSec}秒〜)`}
+              accent
+            />
+          </div>
+        )}
+        {song && !song.videoId && (
+          <div className="mt-3 text-sm text-neutral-600">
+            動画IDが未設定です（手元で曲を探して再生してください）
           </div>
         )}
       </div>
@@ -314,6 +319,34 @@ export default function HostView() {
         )}
       </div>
     </div>
+  );
+}
+
+/** 指定秒から始まる YouTube のリンク。t= が再生開始位置になる */
+function YtLink({
+  videoId,
+  sec,
+  label,
+  accent,
+}: {
+  videoId: string;
+  sec: number;
+  label: string;
+  accent?: boolean;
+}) {
+  return (
+    <a
+      href={`https://www.youtube.com/watch?v=${videoId}&t=${Math.max(0, Math.floor(sec))}s`}
+      target="_blank"
+      rel="noreferrer"
+      className={`rounded-lg px-3 py-2 text-base font-bold ${
+        accent
+          ? "bg-amber-500 text-neutral-900 hover:bg-amber-400"
+          : "bg-sky-700 text-white hover:bg-sky-600"
+      }`}
+    >
+      {label}
+    </a>
   );
 }
 
