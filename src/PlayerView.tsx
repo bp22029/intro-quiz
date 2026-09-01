@@ -38,6 +38,7 @@ const EMPTY: State = {
     playing: false,
     wrongName: null,
     resumeInMs: 0,
+    revealInMs: 0,
   },
   mode: "manual",
   songs: [],

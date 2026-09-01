@@ -18,6 +18,7 @@ const EMPTY: State = {
     playing: false,
     wrongName: null,
     resumeInMs: 0,
+    revealInMs: 0,
   },
   mode: "manual",
   songs: [],
@@ -30,7 +31,8 @@ export default function ScreenView() {
   const [ready, setReady] = useState(false); // 「準備」クリック済みか
   const [elapsed, setElapsed] = useState(0);
 
-  const { index, revealed, playing, wrongName, resumeInMs } = state.round;
+  const { index, revealed, playing, wrongName, resumeInMs, revealInMs } =
+    state.round;
   const mode = state.mode;
   const songs = state.songs;
   const song = songs[index];
@@ -118,6 +120,8 @@ export default function ScreenView() {
   const buzzed = state.buzzedBy;
   const countdown = useCountdown(resumeInMs);
   const showWrong = wrongName !== null;
+  // 「正解は…」の溜め中
+  const suspense = revealInMs > 0 && !revealed;
 
   // 音を出すには1クリックが必要（ブラウザの制約）
   if (!ready) {
@@ -182,7 +186,9 @@ export default function ScreenView() {
         className={`relative flex min-w-0 flex-1 flex-col items-center justify-center overflow-hidden px-10 transition-colors duration-150 ${
           showWrong
             ? "bg-red-800"
-            : buzzed && !revealed
+            : suspense
+              ? "bg-neutral-900"
+              : buzzed && !revealed
               ? "bg-emerald-700"
               : "bg-neutral-950"
         }`}
@@ -192,7 +198,11 @@ export default function ScreenView() {
           第 {index + 1} 問
         </div>
 
-        {showWrong ? (
+        {suspense ? (
+          <div className="text-center">
+            <div className="text-[11vw] font-black leading-none">正解は…</div>
+          </div>
+        ) : showWrong ? (
           <div className="text-center">
             <div className="text-[13vw] font-black leading-none">不正解</div>
             <div className="mt-2 text-4xl text-red-100">{wrongName} さん</div>

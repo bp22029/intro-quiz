@@ -56,11 +56,17 @@ await wait(D);
 check("管理画面の曲送りが投影画面に伝わる", screen.lastState.round.index === 2);
 check("曲送りで答え表示が消える", screen.lastState.round.revealed === false);
 
-// --- 答え表示が伝わる ---
+// --- 正解発表の溜め（「正解は…」）と答え表示 ---
 host.emit("host:reveal");
 await wait(D);
+check("溜めの残り時間が配信される", screen.lastState.round.revealInMs > 500);
+check("溜め中はまだ答えを出さない", screen.lastState.round.revealed === false);
+check("参加者にも溜めが伝わる", a.lastState.round.revealInMs > 0);
+
+await wait(2200); // 溜め明け
 check("答え表示が投影画面に伝わる", screen.lastState.round.revealed === true);
 check("参加者にも同じ state が届く", a.lastState.round.revealed === true);
+check("溜めの残り時間は0になる", screen.lastState.round.revealInMs === 0);
 
 // --- 早押しは答え表示中でも受理される（司会が誤操作した場合の復帰用）---
 a.emit("buzz");
@@ -104,7 +110,7 @@ check("一時停止が伝わる", screen.lastState.round.playing === false);
 // --- 後から参加した画面にも現在の状態が届く ---
 host.emit("host:setSong", 1);
 host.emit("host:reveal");
-await wait(D);
+await wait(2200); // 溜めが明けてから
 const late = await mkClient("late-screen");
 await wait(D);
 check("後から開いた画面にも現在の問題が届く", late.lastState.round.index === 1);
@@ -153,6 +159,29 @@ check("曲送りでカウントダウンも解除される", screen.lastState.ro
 a.emit("buzz");
 await wait(D);
 check("打ち切り後はすぐ押せる", screen.lastState.buzzedBy?.name === "あきら");
+
+// --- 溜めの途中で進行を変えたら演出を打ち切る ---
+host.emit("host:reveal");
+await wait(D);
+check("溜めに入っている", screen.lastState.round.revealInMs > 0);
+host.emit("host:setSong", 0);
+await wait(D);
+check("曲送りで溜めが打ち切られる", screen.lastState.round.revealInMs === 0);
+check("打ち切られたら答えは出ない", screen.lastState.round.revealed === false);
+await wait(2200);
+check("打ち切り後に遅れて答えが出たりしない", screen.lastState.round.revealed === false);
+
+host.emit("host:nextRound");
+await wait(D);
+a.emit("buzz");
+await wait(D);
+host.emit("host:reveal");
+await wait(D);
+host.emit("host:wrong");
+await wait(D);
+check("お手つきでも溜めが打ち切られる", screen.lastState.round.revealInMs === 0);
+await wait(3400);
+check("お手つき後に答えが出たりしない", screen.lastState.round.revealed === false);
 
 console.log(fail.length ? `\n${fail.length} 件 FAIL` : "\nすべて PASS");
 [screen, host, a, b, late].forEach((s) => s.close());

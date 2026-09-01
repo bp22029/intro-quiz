@@ -12,6 +12,7 @@ export type Round = {
   playing: boolean; // YouTubeモードで再生中か
   wrongName: string | null; // 「不正解」を出している相手の名前。null なら出していない
   resumeInMs: number; // 受付再開までの残りミリ秒。0 なら受付中
+  revealInMs: number; // 「正解は…」の溜めの残りミリ秒。0 なら溜めていない
 };
 
 export type State = {

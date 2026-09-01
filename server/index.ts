@@ -99,6 +99,20 @@ let wrongName: string | null = null;
 let resumeAt = 0; // epoch ms。この時刻までは buzz を受け付けない
 let resumeTimer: NodeJS.Timeout | null = null;
 
+// 正解発表の溜め。「正解は…」を出してから答えを見せるまでの間。
+const REVEAL_SUSPENSE_MS = 2000;
+let revealAt = 0; // epoch ms。この時刻に revealed が true になる
+let revealTimer: NodeJS.Timeout | null = null;
+
+/** 溜めを打ち切る */
+function clearReveal() {
+  if (revealTimer) {
+    clearTimeout(revealTimer);
+    revealTimer = null;
+  }
+  revealAt = 0;
+}
+
 /** 演出を打ち切って受付中に戻す */
 function clearWrong() {
   if (resumeTimer) {
@@ -124,6 +138,7 @@ function snapshot(): State {
       wrongName,
       // 絶対時刻ではなく残り時間で送る。端末ごとの時計のズレを持ち込まないため。
       resumeInMs: Math.max(0, resumeAt - Date.now()),
+      revealInMs: Math.max(0, revealAt - Date.now()),
     },
     mode,
   };
@@ -278,6 +293,7 @@ io.on("connection", (socket) => {
 
   socket.on("host:wrong", () => {
     if (!buzzedBy) return; // 誰も押していなければ何もしない
+    clearReveal();
     lockedIds.add(buzzedBy.id);
     lockedNames.add(buzzedBy.name);
     console.log(`[host] wrong: ${buzzedBy.name} をロック`);
@@ -302,6 +318,7 @@ io.on("connection", (socket) => {
 
   socket.on("host:nextRound", () => {
     clearWrong();
+    clearReveal();
     buzzedBy = null;
     lockedIds.clear();
     lockedNames.clear();
@@ -316,6 +333,7 @@ io.on("connection", (socket) => {
     const n = Number(rawIndex);
     if (!Number.isInteger(n) || n < 0) return;
     clearWrong();
+    clearReveal();
     index = n;
     revealed = false;
     playing = false;
@@ -328,9 +346,19 @@ io.on("connection", (socket) => {
 
   socket.on("host:reveal", () => {
     clearWrong();
-    revealed = true;
-    playing = false; // 投影画面側がサビ再生に切り替える
-    console.log("[host] reveal");
+    clearReveal();
+    playing = false;
+    revealed = false;
+    // まず「正解は…」を出し、溜めてから答えを見せる
+    revealAt = Date.now() + REVEAL_SUSPENSE_MS;
+    revealTimer = setTimeout(() => {
+      revealed = true;
+      revealAt = 0;
+      revealTimer = null;
+      console.log("[host] reveal（答え表示）");
+      broadcastState();
+    }, REVEAL_SUSPENSE_MS);
+    console.log("[host] reveal（溜め開始）");
     broadcastState();
   });
 
@@ -372,6 +400,7 @@ io.on("connection", (socket) => {
    */
   socket.on("host:clearPlayers", () => {
     const before = players.size;
+    clearReveal();
     players.clear();
     socketToClient.clear();
     lockedIds.clear();

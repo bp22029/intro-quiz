@@ -18,6 +18,7 @@ const EMPTY: State = {
     playing: false,
     wrongName: null,
     resumeInMs: 0,
+    revealInMs: 0,
   },
   mode: "manual",
   songs: [],
@@ -52,7 +53,9 @@ export default function HostView() {
   }, []);
 
   const songs = state.songs;
-  const { index, revealed, playing, wrongName, resumeInMs } = state.round;
+  const { index, revealed, playing, wrongName, resumeInMs, revealInMs } =
+    state.round;
+  const suspense = revealInMs > 0 && !revealed; // 「正解は…」の溜め中
   const mode = state.mode;
   const song = songs[index];
   const buzzed = state.buzzedBy;
@@ -148,6 +151,11 @@ export default function HostView() {
           <span className="text-lg text-neutral-400">
             第 {index + 1} 問 / 全 {songs.length || "-"} 問
           </span>
+          {suspense && (
+            <span className="rounded bg-neutral-200 px-2 py-0.5 text-sm font-bold text-neutral-900">
+              正解は… 溜め中
+            </span>
+          )}
           {revealed && (
             <span className="rounded bg-amber-400 px-2 py-0.5 text-sm font-bold text-neutral-900">
               答え表示中
@@ -237,15 +245,21 @@ export default function HostView() {
           tone="green"
           onClick={() => {
             socket.emit("host:reveal");
-            // クリック起点でないとポップアップブロックに引っかかるので、
-            // state の変化を待たずにここで開く
             if (autoChorus && mode === "manual" && song?.videoId) {
-              playAt(song.videoId, song.chorusSec ?? song.startSec);
+              const sec = song.chorusSec ?? song.startSec;
+              const w = playerWin.current;
+              if (w && !w.closed) {
+                // タブが既にあれば、投影の「正解は…」が明けるのに合わせて鳴らす
+                setTimeout(() => playAt(song.videoId, sec), SUSPENSE_MS);
+              } else {
+                // タブが無いときはクリック起点でないと開けないので、すぐ開く
+                playAt(song.videoId, sec);
+              }
             }
           }}
-          disabled={revealed}
+          disabled={revealed || suspense}
         >
-          ○ 正解・答えを出す
+          {suspense ? "正解は…" : "○ 正解・答えを出す"}
         </Btn>
         <Btn
           tone="red"
@@ -660,6 +674,9 @@ export function ytUrl(videoId: string, sec: number): string {
 
 /** 曲再生用のタブ。同じ名前を使うことでタブが増え続けないようにする */
 const YT_TAB = "introquiz-player";
+
+/** 正解発表の溜め。server/index.ts の REVEAL_SUSPENSE_MS と揃えること */
+const SUSPENSE_MS = 2000;
 
 function Field({
   label,
