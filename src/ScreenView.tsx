@@ -6,52 +6,31 @@ import { useYouTube, ytErrorMessage } from "./useYouTube";
 
 const EMPTY: State = { buzzedBy: null, lockedIds: [], players: [] };
 
+/** クリック後にフォーカスを外す。Space/Enter で意図せず再発火するのを防ぐ */
+function blur(e: React.MouseEvent<HTMLButtonElement>) {
+  e.currentTarget.blur();
+}
+
 export default function ScreenView() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [state, setState] = useState<State>(EMPTY);
   const [url, setUrl] = useState<string>(window.location.origin);
 
-  const [started, setStarted] = useState(false); // 「準備完了」を押したか
+  const [started, setStarted] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [mode, setMode] = useState<PlayMode>("youtube");
   const [index, setIndex] = useState(0);
-  const [revealed, setRevealed] = useState(false); // 答え表示中
+  const [revealed, setRevealed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
-  const [toast, setToast] = useState<string | null>(null);
-
   const yt = useYouTube(songs, mode === "youtube");
 
-  // キーボードハンドラから常に最新値を読むための ref
-  const r = useRef({
-    mode,
-    index,
-    playing,
-    revealed,
-    songs,
-    yt,
-    started,
-    buzzedBy: state.buzzedBy,
-  });
-  r.current = {
-    mode,
-    index,
-    playing,
-    revealed,
-    songs,
-    yt,
-    started,
-    buzzedBy: state.buzzedBy,
-  };
-
-  // キー操作のフィードバック。押したのに何も起きないと当日操作を見失う。
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flash = useCallback((msg: string) => {
-    setToast(msg);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 1800);
-  }, []);
+  // buzzed 受信時に常に最新の値を読むための ref
+  const ytRef = useRef(yt);
+  ytRef.current = yt;
+  const liveRef = useRef({ mode, index });
+  liveRef.current = { mode, index };
 
   // --- データ読み込み ---
   useEffect(() => {
@@ -71,10 +50,8 @@ export default function ScreenView() {
     const onBuzzed = (_p: Player) => {
       // 両モード必須。手動モードではこれが唯一の停止トリガーになる。
       beep();
-      // YouTube モードなら曲を止める
-      if (r.current.mode === "youtube") {
-        r.current.yt.pause(r.current.index);
-        setPlaying(false);
+      if (liveRef.current.mode === "youtube") {
+        ytRef.current.pause(liveRef.current.index);
       }
     };
     socket.on("state", onState);
@@ -85,6 +62,11 @@ export default function ScreenView() {
     };
   }, []);
 
+  // 押されたら再生表示を止める
+  useEffect(() => {
+    if (state.buzzedBy) setPlaying(false);
+  }, [state.buzzedBy]);
+
   // --- 経過秒数 ---
   useEffect(() => {
     if (!playing) return;
@@ -92,184 +74,139 @@ export default function ScreenView() {
     return () => clearInterval(t);
   }, [playing]);
 
+  const song = songs[index];
+
   // --- 操作 ---
 
   const goToSong = useCallback(
     (next: number) => {
-      const { songs: ss, mode: m, yt: y, index: cur } = r.current;
-      if (ss.length === 0) return;
-      const clamped = Math.max(0, Math.min(ss.length - 1, next));
-      if (m === "youtube") {
-        y.pause(cur);
-        y.seekToStart(clamped);
+      if (songs.length === 0) return;
+      const clamped = Math.max(0, Math.min(songs.length - 1, next));
+      if (mode === "youtube") {
+        yt.pause(index);
+        yt.seekToStart(clamped);
       }
       setIndex(clamped);
       setRevealed(false);
       setPlaying(false);
       setElapsed(0);
       socket.emit("host:nextRound");
-      flash(`第${clamped + 1}問へ（お手つき全解除）`);
     },
-    [flash],
+    [songs.length, mode, yt, index],
   );
 
   const togglePlay = useCallback(() => {
-    // 手動モードでは再生位置に関する処理をすべて無効化する
-    if (r.current.mode !== "youtube") {
-      flash("手動モードでは再生操作は効きません");
-      return;
-    }
-    const { yt: y, index: i, playing: p } = r.current;
-    if (p) {
-      y.pause(i);
+    if (mode !== "youtube") return;
+    if (playing) {
+      yt.pause(index);
       setPlaying(false);
-      flash("一時停止");
     } else {
-      y.play(i);
+      yt.play(index);
       setPlaying(true);
-      flash("再生");
     }
-  }, [flash]);
+  }, [mode, playing, yt, index]);
 
   const markCorrect = useCallback(() => {
-    if (r.current.mode === "youtube") {
-      r.current.yt.pause(r.current.index);
-    }
+    setRevealed(true);
     setPlaying(false);
-    setRevealed(true); // カバーを外して映像を見せる
-    flash("正解！ 答えを表示");
-  }, [flash]);
+    // テレビ番組と同じく、答えを出した瞬間にサビを鳴らす
+    if (mode === "youtube" && song) {
+      yt.seekAndPlay(index, song.chorusSec ?? song.startSec);
+    }
+  }, [mode, song, yt, index]);
 
   const markWrong = useCallback(() => {
-    // 誰も押していないときに誤答を出しても、サーバーは誰もロックしない。
-    // 画面が何も変わらず「無反応」に見えるので、ここで明示する。
-    const target = r.current.buzzedBy;
-    if (!target) {
-      flash("まだ誰も押していません");
-      return;
-    }
-    // 既に答えを出してしまった後は、曲を鳴らし直しても問題として成立しない。
-    // 受付だけ戻し、再生は再開しない。
-    const afterReveal = r.current.revealed;
+    if (!state.buzzedBy) return;
+    const afterReveal = revealed;
     socket.emit("host:wrong");
     setRevealed(false);
-    if (r.current.mode === "youtube" && !afterReveal) {
-      r.current.yt.play(r.current.index); // 続きから再生再開
+    // 答えを出した後は曲を鳴らし直しても問題として成立しないので再開しない
+    if (mode === "youtube" && !afterReveal) {
+      yt.play(index);
       setPlaying(true);
+    } else if (mode === "youtube") {
+      yt.pause(index);
     }
-    flash(
-      afterReveal
-        ? `お手つき: ${target.name} さん（答え表示済みのため再生は再開しません）`
-        : `お手つき: ${target.name} さん（受付再開）`,
-    );
-  }, [flash]);
+  }, [state.buzzedBy, revealed, mode, yt, index]);
 
-  // --- キーボード（投影画面のみ） ---
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      // M（モード切替）だけは準備画面でも効かせる。手動に逃げる導線を塞がない。
-      if (e.key === "m" || e.key === "M") {
-        setMode((m) => {
-          const next = m === "youtube" ? "manual" : "youtube";
-          flash(next === "manual" ? "手動モードに切替" : "YouTubeモードに切替");
-          return next;
-        });
-        setPlaying(false);
-        return;
-      }
-      if (!r.current.started) return;
-      switch (e.key) {
-        case " ":
-          e.preventDefault(); // ブラウザのスクロールを止める
-          togglePlay();
-          break;
-        case "1":
-          markCorrect();
-          break;
-        case "2":
-          markWrong();
-          break;
-        case "r":
-        case "R":
-          socket.emit("host:reset");
-          flash("押下を取り消しました（ロックなし）");
-          break;
-        case "n":
-        case "N":
-          goToSong(r.current.index + 1);
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          goToSong(r.current.index - 1);
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          goToSong(r.current.index + 1);
-          break;
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlay, markCorrect, markWrong, goToSong, flash]);
+  const stopChorus = useCallback(() => {
+    if (mode === "youtube") yt.pause(index);
+  }, [mode, yt, index]);
 
-  const song = songs[index];
   const errorCodes = Object.entries(yt.errors);
+  const buzzed = state.buzzedBy;
 
   // -------------------------------------------------------------------------
-  // 準備完了ゲート（両モードで出す。AudioContext の解除に1クリックが必須）
+  // 準備画面
   // -------------------------------------------------------------------------
   if (!started) {
     const waitingYT = mode === "youtube" && !yt.ready && songs.length > 0;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-8 p-10">
-        <h1 className="text-6xl font-black">イントロクイズ</h1>
+      <div className="flex h-full flex-col items-center justify-center gap-10 p-10">
+        <h1 className="text-7xl font-black tracking-tight">イントロクイズ</h1>
+
         {!unlocking ? (
           <button
-            className="rounded-2xl bg-red-600 px-16 py-8 text-4xl font-bold hover:bg-red-500"
-            onClick={async () => {
+            className="rounded-2xl bg-red-600 px-20 py-8 text-4xl font-bold hover:bg-red-500"
+            onClick={async (e) => {
+              blur(e);
               setUnlocking(true);
               await unlockAudio();
-              beep(); // 実際に鳴るか、この場で耳で確認する
+              beep();
             }}
           >
-            準備完了
+            準備をはじめる
           </button>
         ) : (
           <>
-            <div className="text-3xl text-neutral-300">
-              {mode === "youtube"
-                ? `動画の準備 ${yt.readyCount} / ${yt.total} 曲`
-                : "手動モード（YouTubeプレイヤーは使いません）"}
+            <div className="flex items-center gap-8 text-3xl">
+              <StatusDot ok={isAudioUnlocked()} />
+              <span>音声{isAudioUnlocked() ? "OK（ピッと鳴りましたか？）" : "未解除"}</span>
             </div>
-            <div className="text-xl text-neutral-500">
-              音声解除: {isAudioUnlocked() ? "OK（ビープが鳴りましたか？）" : "失敗"}
-            </div>
+            {mode === "youtube" ? (
+              <div className="flex items-center gap-8 text-3xl">
+                <StatusDot ok={yt.ready} />
+                <span>
+                  曲の読み込み {yt.readyCount} / {yt.total} 曲
+                </span>
+              </div>
+            ) : (
+              <div className="text-3xl text-neutral-400">
+                手動モード（曲は手元で再生します）
+              </div>
+            )}
+
             {errorCodes.length > 0 && (
-              <div className="rounded-xl bg-red-950 p-5 text-xl text-red-300">
+              <div className="rounded-xl bg-red-950 px-8 py-5 text-2xl text-red-300">
                 {errorCodes.map(([i, code]) => (
                   <div key={i}>
-                    第{Number(i) + 1}問: {ytErrorMessage(Number(code))}（コード {code}）
+                    第{Number(i) + 1}問: {ytErrorMessage(Number(code))}
                   </div>
                 ))}
               </div>
             )}
+
             <button
-              className="rounded-2xl bg-green-600 px-16 py-8 text-4xl font-bold hover:bg-green-500"
-              onClick={() => setStarted(true)}
+              className="rounded-2xl bg-green-600 px-20 py-8 text-4xl font-bold hover:bg-green-500"
+              onClick={(e) => {
+                blur(e);
+                setStarted(true);
+              }}
             >
-              {waitingYT ? "準備を待たずに開始する" : "開始する"}
+              {waitingYT ? "読み込みを待たずに開始" : "開始する"}
             </button>
-            {waitingYT && (
-              <p className="max-w-2xl text-center text-lg text-neutral-500">
-                動画の準備が揃っていません。埋め込み禁止の曲がある場合は揃いません。
-                その場合は開始後に <kbd>M</kbd> で手動モードに切り替えてください。
-              </p>
-            )}
           </>
         )}
-        <p className="text-lg text-neutral-500">
-          モード切替は <kbd className="rounded bg-neutral-800 px-2">M</kbd>（現在: {mode}）
-        </p>
+
+        <button
+          className="rounded-xl border border-neutral-700 px-8 py-3 text-xl text-neutral-400 hover:bg-neutral-800"
+          onClick={(e) => {
+            blur(e);
+            setMode((m) => (m === "youtube" ? "manual" : "youtube"));
+          }}
+        >
+          再生モード: {mode === "youtube" ? "YouTube" : "手動"}（切り替える）
+        </button>
       </div>
     );
   }
@@ -277,117 +214,115 @@ export default function ScreenView() {
   // -------------------------------------------------------------------------
   // 本編
   // -------------------------------------------------------------------------
-  const buzzed = state.buzzedBy;
-
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col bg-neutral-950">
       <div className="flex min-h-0 flex-1">
-        {/* 左カラム（狭い）: QR / URL / 参加者一覧 */}
-        <aside className="flex w-[22%] min-w-[240px] flex-col gap-4 border-r border-neutral-800 p-5">
-          <img
-            src="/qr.png"
-            alt="参加用QRコード"
-            className="w-full rounded-xl bg-white p-2"
-          />
-          <div className="break-all text-center text-lg text-neutral-300">{url}</div>
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <div className="pb-2 text-xl text-neutral-400">
+        {/* 左: QR と参加者 */}
+        <aside className="flex w-[300px] shrink-0 flex-col gap-5 border-r border-neutral-800 p-6">
+          <img src="/qr.png" alt="参加用QR" className="w-full rounded-xl bg-white p-2" />
+          <div className="text-center text-base leading-tight text-neutral-500">
+            {url.replace(/^https?:\/\//, "")}
+          </div>
+          <div className="min-h-0 flex-1">
+            <div className="pb-3 text-xl text-neutral-500">
               参加者 {state.players.length}人
             </div>
             <ul className="flex flex-wrap gap-2">
-              {state.players.map((p) => (
-                <li
-                  key={p.id}
-                  className={`rounded-lg px-3 py-1 text-xl ${
-                    state.lockedIds.includes(p.id)
-                      ? "bg-neutral-800 text-neutral-500 line-through"
-                      : "bg-neutral-700"
-                  }`}
-                >
-                  {p.name}
-                  {state.lockedIds.includes(p.id) && (
-                    <span className="ml-1 text-sm no-underline">お手つき</span>
-                  )}
-                </li>
-              ))}
+              {state.players.map((p) => {
+                const locked = state.lockedIds.includes(p.id);
+                return (
+                  <li
+                    key={p.id}
+                    className={`rounded-lg px-3 py-1.5 text-xl ${
+                      locked
+                        ? "bg-neutral-900 text-neutral-600"
+                        : "bg-neutral-800 text-neutral-100"
+                    }`}
+                  >
+                    {p.name}
+                    {locked && <span className="ml-2 text-sm">お手つき</span>}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </aside>
 
-        {/* 右カラム（広い） */}
+        {/* 右: メイン表示 */}
         <main
-          className={`relative flex min-w-0 flex-1 flex-col items-center justify-center p-6 transition-colors ${
-            buzzed && !revealed ? "bg-green-800" : ""
+          className={`relative flex min-w-0 flex-1 flex-col items-center justify-center overflow-hidden px-8 transition-colors duration-150 ${
+            buzzed && !revealed ? "bg-emerald-700" : "bg-neutral-950"
           }`}
         >
-          {/* 再生モード表示（隅に常時） */}
-          <div className="absolute right-4 top-3 z-30 text-lg text-neutral-400">
-            {mode === "youtube" ? "YouTube モード" : "手動モード"}
-            {mode === "youtube" &&
-              !yt.ready &&
-              ` (動画準備 ${yt.readyCount}/${yt.total}曲)`}
+          <div className="absolute left-6 top-5 text-xl text-neutral-500">
+            第 {index + 1} 問 / 全 {songs.length || "-"} 問
           </div>
-          <div className="absolute left-4 top-3 z-30 text-lg text-neutral-400">
-            第{index + 1}問 / {songs.length || "-"}
+          <div className="absolute right-6 top-5 text-xl text-neutral-500">
+            {mode === "youtube" ? "YouTube" : "手動"}
           </div>
 
-          {/* --- レイヤー0: YouTube プレイヤー。display:none にはしない（6.4） --- */}
-          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          {revealed ? (
+            <div className="text-center">
+              <div className="mb-3 text-3xl tracking-[0.3em] text-neutral-500">
+                こたえ
+              </div>
+              <div className="break-all text-[8vw] font-black leading-[1.05]">
+                {song?.title ?? "-"}
+              </div>
+              <div className="mt-3 text-[4vw] font-bold leading-tight text-neutral-300">
+                {song?.artist ?? ""}
+              </div>
+              <div className="mt-8 inline-block rounded-2xl bg-amber-400 px-8 py-3 text-[2.6vw] font-black text-neutral-900">
+                {song?.owner ?? "?"} さんの推し曲
+              </div>
+              {buzzed && (
+                <div className="mt-6 text-3xl text-emerald-400">
+                  正解者: {buzzed.name} さん
+                </div>
+              )}
+            </div>
+          ) : buzzed ? (
+            <div className="text-center">
+              <div className="mb-2 text-4xl font-bold text-emerald-100">
+                回答者
+              </div>
+              <div className="break-all text-[12vw] font-black leading-none">
+                {buzzed.name}
+              </div>
+            </div>
+          ) : playing ? (
+            <div className="text-center">
+              <div className="text-[16vw] font-black leading-none tabular-nums">
+                {elapsed}
+              </div>
+              <div className="text-4xl text-neutral-500">秒</div>
+            </div>
+          ) : (
+            <div className="text-center">
+              <div className="text-[14vw] font-black leading-none">
+                第 {index + 1} 問
+              </div>
+              <div className="mt-6 text-3xl text-neutral-500">
+                {mode === "youtube" ? "「再生」で開始" : "手元で曲を再生してください"}
+              </div>
+            </div>
+          )}
+
+          {/* YouTube プレイヤーは音源としてのみ使う。映像は常に隠す（MVが無い曲があるため） */}
+          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden opacity-0">
             {songs.map((_, i) => (
               <div
                 key={i}
                 className="yt-slot absolute h-full w-full"
-                style={
-                  i === index && mode === "youtube"
-                    ? { left: 0, top: 0 }
-                    : { left: "-200vw", top: 0 } // 画面外に置く
-                }
+                style={i === index ? { left: 0, top: 0 } : { left: "-200vw", top: 0 }}
               >
                 <div className="h-full w-full" ref={yt.registerRef(i)} />
               </div>
             ))}
           </div>
 
-          {/* --- レイヤー1: 目隠しカバー。正解表示（1キー）で外す --- */}
-          {!revealed && (
-            <div className="pointer-events-none absolute inset-0 z-10 bg-neutral-950" />
-          )}
-
-          {/* --- レイヤー2: 表示内容 --- */}
-          {revealed ? (
-            // カバーを外して映像を見せる。答えは下部の帯に重ねる。
-            <div className="absolute inset-x-0 bottom-0 z-20 bg-black/75 px-8 py-6">
-              <Answer song={song} buzzed={buzzed} />
-            </div>
-          ) : buzzed ? (
-            <div className="relative z-20 text-center">
-              <div className="text-4xl text-green-200">回答者</div>
-              <div className="break-all text-[11vw] font-black leading-none">
-                {buzzed.name}
-              </div>
-            </div>
-          ) : playing ? (
-            <div className="relative z-20 text-center">
-              <div className="text-[14vw] font-black leading-none tabular-nums">
-                {elapsed}
-              </div>
-              <div className="text-4xl text-neutral-400">秒経過</div>
-            </div>
-          ) : (
-            <div className="relative z-20 text-center">
-              <div className="text-[14vw] font-black leading-none">
-                第{index + 1}問
-              </div>
-              {mode === "manual" && (
-                <div className="mt-4 text-3xl text-neutral-400">
-                  手動で再生してください
-                </div>
-              )}
-            </div>
-          )}
-
           {errorCodes.length > 0 && (
-            <div className="absolute bottom-3 right-4 z-30 rounded-lg bg-red-950 px-4 py-2 text-lg text-red-300">
+            <div className="absolute bottom-4 left-6 rounded-lg bg-red-950/90 px-4 py-2 text-lg text-red-300">
               {errorCodes.map(([i, code]) => (
                 <div key={i}>
                   第{Number(i) + 1}問: {ytErrorMessage(Number(code))}
@@ -398,55 +333,110 @@ export default function ScreenView() {
         </main>
       </div>
 
-      {/* 直前の操作の表示。押しても何も起きないと当日操作を見失うため */}
-      {toast && (
-        <div className="pointer-events-none fixed bottom-16 left-1/2 -translate-x-1/2 rounded-xl bg-neutral-100 px-8 py-3 text-3xl font-bold text-neutral-900 shadow-lg">
-          {toast}
-        </div>
-      )}
+      {/* 操作バー（クリック操作） */}
+      <footer className="flex shrink-0 items-center gap-3 border-t border-neutral-800 bg-neutral-900 px-5 py-3">
+        <Btn
+          onClick={() => goToSong(index - 1)}
+          disabled={index === 0}
+          tone="ghost"
+        >
+          ‹ 前
+        </Btn>
 
-      {/* キー割り当て（常時表示） */}
-      <footer className="flex flex-wrap justify-center gap-5 border-t border-neutral-800 px-4 py-2 text-base text-neutral-500">
-        <Key k="Space" v="再生/一時停止" />
-        <Key k="1" v="正解→答え表示" />
-        <Key k="2" v="誤答→再開" />
-        <Key k="R" v="押下取消" />
-        <Key k="N" v="次の曲" />
-        <Key k="←→" v="曲選択" />
-        <Key k="M" v="モード切替" />
+        {mode === "youtube" ? (
+          <Btn onClick={togglePlay} tone={playing ? "amber" : "blue"} wide>
+            {playing ? "⏸ 一時停止" : "▶ 再生"}
+          </Btn>
+        ) : (
+          <div className="px-4 text-lg text-neutral-500">手元で再生</div>
+        )}
+
+        <div className="mx-2 h-10 w-px bg-neutral-700" />
+
+        <Btn onClick={markCorrect} tone="green" wide disabled={revealed}>
+          ○ 正解（答えを出す）
+        </Btn>
+        <Btn onClick={markWrong} tone="red" wide disabled={!buzzed}>
+          × お手つき
+        </Btn>
+        <Btn
+          onClick={() => socket.emit("host:reset")}
+          tone="ghost"
+          disabled={!buzzed}
+        >
+          押し直し
+        </Btn>
+
+        {revealed && mode === "youtube" && (
+          <Btn onClick={stopChorus} tone="ghost">
+            ♪ 止める
+          </Btn>
+        )}
+
+        <div className="flex-1" />
+
+        <Btn
+          onClick={() => setMode((m) => (m === "youtube" ? "manual" : "youtube"))}
+          tone="ghost"
+        >
+          モード: {mode === "youtube" ? "YouTube" : "手動"}
+        </Btn>
+        <Btn
+          onClick={() => goToSong(index + 1)}
+          disabled={index >= songs.length - 1}
+          tone="blue"
+          wide
+        >
+          次の問題 ›
+        </Btn>
       </footer>
     </div>
   );
 }
 
-function Answer({
-  song,
-  buzzed,
-}: {
-  song: Song | undefined;
-  buzzed: Player | null;
-}) {
-  if (!song) return <div className="text-6xl">曲データがありません</div>;
+function StatusDot({ ok }: { ok: boolean }) {
   return (
-    <div className="text-center">
-      <div className="text-3xl text-neutral-400">正解</div>
-      <div className="break-all text-[7vw] font-black leading-tight">{song.title}</div>
-      <div className="text-[3.5vw] text-neutral-300">{song.artist}</div>
-      <div className="mt-4 text-[2.5vw] text-yellow-300">
-        {song.owner} さんの推し曲
-      </div>
-      {buzzed && (
-        <div className="mt-3 text-3xl text-green-300">回答者: {buzzed.name}</div>
-      )}
-    </div>
+    <span
+      className={`inline-block h-5 w-5 rounded-full ${
+        ok ? "bg-green-500" : "bg-neutral-600"
+      }`}
+    />
   );
 }
 
-function Key({ k, v }: { k: string; v: string }) {
+function Btn({
+  children,
+  onClick,
+  disabled,
+  tone = "ghost",
+  wide,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: "green" | "red" | "blue" | "amber" | "ghost";
+  wide?: boolean;
+}) {
+  const tones: Record<string, string> = {
+    green: "bg-emerald-600 hover:bg-emerald-500 text-white",
+    red: "bg-red-600 hover:bg-red-500 text-white",
+    blue: "bg-sky-700 hover:bg-sky-600 text-white",
+    amber: "bg-amber-600 hover:bg-amber-500 text-white",
+    ghost:
+      "bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700",
+  };
   return (
-    <span>
-      <kbd className="rounded bg-neutral-800 px-2 py-0.5 text-neutral-300">{k}</kbd>{" "}
-      {v}
-    </span>
+    <button
+      onClick={(e) => {
+        e.currentTarget.blur();
+        onClick();
+      }}
+      disabled={disabled}
+      className={`rounded-xl font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+        tones[tone]
+      } ${wide ? "px-7 py-3.5 text-2xl" : "px-5 py-3 text-lg"}`}
+    >
+      {children}
+    </button>
   );
 }

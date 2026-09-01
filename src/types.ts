@@ -18,6 +18,7 @@ export type Song = {
   artist: string;
   owner: string; // この曲を挙げた人
   startSec: number; // イントロ開始位置（秒）
+  chorusSec?: number; // サビの開始位置（秒）。答え表示時にここへ飛んで再生する
 };
 
 export type PlayMode = "youtube" | "manual";

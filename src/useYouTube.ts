@@ -24,6 +24,8 @@ export type YouTubeController = {
   pause: (index: number) => void;
   /** songs[index].startSec に頭出しして一時停止状態に戻す */
   seekToStart: (index: number) => void;
+  /** 指定秒へジャンプしてそのまま再生する（サビ再生用） */
+  seekAndPlay: (index: number, sec: number) => void;
 };
 
 let apiPromise: Promise<void> | null = null;
@@ -237,6 +239,21 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
     [getControllablePlayer],
   );
 
+  const seekAndPlay = useCallback(
+    (index: number, sec: number): void => {
+      const player = getControllablePlayer(index);
+      if (!player) return;
+
+      try {
+        player.seekTo(Math.max(0, sec), true);
+        player.playVideo();
+      } catch {
+        // 未準備などのAPI例外は画面操作へ波及させない。
+      }
+    },
+    [getControllablePlayer],
+  );
+
   const seekToStart = useCallback(
     (index: number): void => {
       const player = getControllablePlayer(index);
@@ -263,6 +280,7 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
     play,
     pause,
     seekToStart,
+    seekAndPlay,
   };
 }
 
