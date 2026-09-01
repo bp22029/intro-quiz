@@ -23,6 +23,8 @@ export default function ScreenView() {
   const [revealed, setRevealed] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  // この問題で一度でも曲を鳴らしたか。鳴らす前に答えを出せてしまう事故を防ぐ
+  const [hasPlayed, setHasPlayed] = useState(false);
 
   const yt = useYouTube(songs, mode === "youtube");
 
@@ -89,6 +91,7 @@ export default function ScreenView() {
       setIndex(clamped);
       setRevealed(false);
       setPlaying(false);
+      setHasPlayed(false);
       setElapsed(0);
       socket.emit("host:nextRound");
     },
@@ -103,6 +106,7 @@ export default function ScreenView() {
     } else {
       yt.play(index);
       setPlaying(true);
+      setHasPlayed(true);
     }
   }, [mode, playing, yt, index]);
 
@@ -135,6 +139,12 @@ export default function ScreenView() {
 
   const errorCodes = Object.entries(yt.errors);
   const buzzed = state.buzzedBy;
+  // 現在の曲が YouTube 側で再生できない状態か
+  const currentError: number | undefined = yt.errors[index];
+  // 曲を鳴らす前に答えを出せてしまうと問題が成立しない。
+  // 手動モードは再生をアプリが把握できないので、この制限をかけない。
+  const canReveal =
+    !revealed && (mode === "manual" || hasPlayed || !!buzzed || !!currentError);
 
   // -------------------------------------------------------------------------
   // 準備画面
@@ -321,13 +331,15 @@ export default function ScreenView() {
             ))}
           </div>
 
-          {errorCodes.length > 0 && (
-            <div className="absolute bottom-4 left-6 rounded-lg bg-red-950/90 px-4 py-2 text-lg text-red-300">
-              {errorCodes.map(([i, code]) => (
-                <div key={i}>
-                  第{Number(i) + 1}問: {ytErrorMessage(Number(code))}
-                </div>
-              ))}
+          {currentError !== undefined && (
+            <div className="absolute inset-x-8 bottom-6 rounded-xl border-2 border-red-500 bg-red-950/95 px-6 py-4 text-center">
+              <div className="text-3xl font-bold text-red-200">
+                この曲は YouTube で再生できません
+              </div>
+              <div className="mt-1 text-xl text-red-300">
+                {ytErrorMessage(currentError)} — 「モード: 手動」に切り替えて、
+                手元で曲を再生してください
+              </div>
             </div>
           )}
         </main>
@@ -344,7 +356,12 @@ export default function ScreenView() {
         </Btn>
 
         {mode === "youtube" ? (
-          <Btn onClick={togglePlay} tone={playing ? "amber" : "blue"} wide>
+          <Btn
+            onClick={togglePlay}
+            tone={playing ? "amber" : "blue"}
+            wide
+            disabled={currentError !== undefined}
+          >
             {playing ? "⏸ 一時停止" : "▶ 再生"}
           </Btn>
         ) : (
@@ -353,7 +370,7 @@ export default function ScreenView() {
 
         <div className="mx-2 h-10 w-px bg-neutral-700" />
 
-        <Btn onClick={markCorrect} tone="green" wide disabled={revealed}>
+        <Btn onClick={markCorrect} tone="green" wide disabled={!canReveal}>
           ○ 正解（答えを出す）
         </Btn>
         <Btn onClick={markWrong} tone="red" wide disabled={!buzzed}>
