@@ -65,10 +65,14 @@ function sanitizeSong(raw: unknown): Song | null {
 }
 
 function loadSongsFromDisk(): Song[] {
-  // ビルド後は dist/songs.json、開発時は public/songs.json にある
+  // ビルド後は dist/songs.json、開発時は public/songs.json にある。
+  // songs.json は実名を含むためコミットしない運用なので、
+  // 未作成のクローンでも起動できるよう songs.sample.json へフォールバックする。
   const candidates = [
     path.join(__dirname, "../dist/songs.json"),
     path.join(__dirname, "../public/songs.json"),
+    path.join(__dirname, "../dist/songs.sample.json"),
+    path.join(__dirname, "../public/songs.sample.json"),
   ];
   for (const file of candidates) {
     try {

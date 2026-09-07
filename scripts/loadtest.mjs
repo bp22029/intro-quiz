@@ -1,6 +1,6 @@
 // 同時接続数を増やしたときの早押しの応答時間を測る。
 //   node scripts/loadtest.mjs [url] [人数]
-// 例: node scripts/loadtest.mjs https://intro-quiz-u3vn.onrender.com 30
+// 例: node scripts/loadtest.mjs http://localhost:3000 30
 import { io } from "socket.io-client";
 
 const URL = process.argv[2] || "http://localhost:3000";

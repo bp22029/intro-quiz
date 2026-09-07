@@ -1,0 +1,26 @@
+[
+  {
+    "videoId": "dQw4w9WgXcQ",
+    "title": "サンプル曲1",
+    "artist": "サンプルアーティスト",
+    "owner": "推した人の名前",
+    "startSec": 0,
+    "chorusSec": 43
+  },
+  {
+    "videoId": "dQw4w9WgXcQ",
+    "title": "サンプル曲2",
+    "artist": "サンプルアーティスト",
+    "owner": "推した人の名前",
+    "startSec": 12,
+    "chorusSec": 60
+  },
+  {
+    "videoId": "dQw4w9WgXcQ",
+    "title": "サンプル曲3",
+    "artist": "サンプルアーティスト",
+    "owner": "推した人の名前",
+    "startSec": 0,
+    "chorusSec": 88
+  }
+]
