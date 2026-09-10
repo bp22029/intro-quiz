@@ -121,6 +121,37 @@ host.emit("host:reset");
 await wait(D);
 check("止まっていたなら押し直しでも鳴らない", hostState.state?.round?.playing === false);
 
+// --- 溜めのあいだに助走を鳴らすので、押した瞬間から playing が立つ ---
+host.emit("host:setSuspense", 2000);
+host.emit("host:setSong", 0);
+await wait(D);
+host.emit("host:reveal");
+await wait(D);
+check("溜め中はまだ答えを出さない", hostState.state?.round?.revealed === false);
+check("溜めに入っている", hostState.state?.round?.revealInMs > 0);
+check(
+  "溜めのあいだから鳴っている（助走）",
+  hostState.state?.round?.playing === true,
+);
+await wait(2000 + D * 2);
+check("溜め明けに答えが出る", hostState.state?.round?.revealed === true);
+check("答えが出た後も鳴り続ける", hostState.state?.round?.playing === true);
+
+// 手動モードでは助走を鳴らさない（別タブ側の都合があるため）
+host.emit("host:setMode", "manual");
+host.emit("host:setSong", 0);
+await wait(D);
+host.emit("host:reveal");
+await wait(D);
+check(
+  "手動モードでは溜め中に playing を立てない",
+  hostState.state?.round?.playing === false,
+);
+await wait(2000 + D * 2);
+host.emit("host:setMode", "youtube");
+host.emit("host:setSong", 0);
+await wait(D);
+
 // --- 答えを出すとサビが鳴るので、YouTubeモードでは playing が立つ ---
 host.emit("host:setSuspense", 0); // 溜めなしで即答え
 await wait(D);

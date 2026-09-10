@@ -185,30 +185,43 @@ export default function HostView() {
   }, [yt.ready, mode, playing, revealed, index, yt]);
 
   // サーバー状態に合わせてプレイヤーを追従させる
-  const prevPlay = useRef({ index: -1, revealed: false, playing: false });
+  const prevPlay = useRef({
+    index: -1,
+    revealed: false,
+    playing: false,
+    suspense: false,
+  });
   useEffect(() => {
     if (mode !== "youtube") return;
     const p = prevPlay.current;
+    const chorus = song?.chorusSec ?? song?.startSec ?? 0;
 
     if (p.index !== index) {
       yt.pause(p.index);
       yt.seekToStart(index);
-    } else if (revealed && !p.revealed) {
-      // 答えを出した瞬間にサビへ飛ぶ
-      yt.seekAndPlay(index, song?.chorusSec ?? song?.startSec ?? 0);
+    } else if (suspense && !p.suspense) {
+      // 「正解は…」の溜めに入った。溜めの長さぶん手前から鳴らして助走にする。
+      // 溜めが明けて答えが出る瞬間に、ちょうどサビの頭が来る。
+      yt.seekAndPlay(index, Math.max(0, chorus - state.suspenseMs / 1000));
+    } else if (revealed && !p.revealed && !p.suspense) {
+      // 溜め無し設定のときだけ、ここでサビへ飛ぶ。
+      // 溜めがあった場合は既に助走中なので、飛ばすと巻き戻ってしまう。
+      yt.seekAndPlay(index, chorus);
     } else if (playing && !p.playing) {
       yt.play(index);
     } else if (!playing && p.playing) {
       yt.pause(index);
     }
 
-    prevPlay.current = { index, revealed, playing };
-  }, [mode, index, revealed, playing, yt, song]);
+    prevPlay.current = { index, revealed, playing, suspense };
+  }, [mode, index, revealed, playing, suspense, state.suspenseMs, yt, song]);
 
-  // 答えを消したときはサビも止める
+  // 答えを消したときはサビも止める。溜め中は鳴らしているので対象外。
   useEffect(() => {
-    if (mode === "youtube" && !revealed && !playing) yt.pause(index);
-  }, [revealed, playing, mode, yt, index]);
+    if (mode === "youtube" && !revealed && !playing && !suspense) {
+      yt.pause(index);
+    }
+  }, [revealed, playing, suspense, mode, yt, index]);
 
   if (!armed) {
     return (

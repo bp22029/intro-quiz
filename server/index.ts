@@ -411,8 +411,11 @@ io.on("connection", (socket) => {
   socket.on("host:reveal", () => {
     clearWrong();
     clearReveal();
-    playing = false;
     revealed = false;
+    // YouTubeモードでは、溜めのあいだにサビへ向けた助走を鳴らす。
+    // 答えが出る瞬間にサビの頭が来るので、そこが山になる。
+    // 手動モードは別タブ側の都合があるので従来どおり止めたまま。
+    playing = mode === "youtube";
     // まず「正解は…」を出し、溜めてから答えを見せる
     if (suspenseMs <= 0) {
       // 溜めなし。すぐ答えを出す
