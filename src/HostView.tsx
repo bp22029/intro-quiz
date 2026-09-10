@@ -9,6 +9,8 @@
 // 原理的に成立しない。別窓に分けると並べて配置し続ける必要が出てしまう。
 import { useCallback, useEffect, useRef, useState } from "react";
 import { beep, playBuzz, preloadSfx, unlockAudio } from "./beep";
+import { RoomMissing, useRoomMissing } from "./RoomMissing";
+import { hostPath, roomRef, screenPath } from "./room";
 import { socket } from "./socket";
 import { useCountdown } from "./useCountdown";
 import type { PlayMode, Song, State } from "./types";
@@ -41,6 +43,10 @@ export default function HostView() {
   const [draft, setDraft] = useState<Song[] | null>(null);
   const [connected, setConnected] = useState(socket.connected);
   const [armed, setArmed] = useState(false); // 音声解除済みか
+  const roomMissing = useRoomMissing();
+  // この画面のURLに入っている主催キー。投影画面を開くのに使う。
+  // main.tsx がこの kind のときだけ HostView を描くので、必ず入っている。
+  const hostKey = roomRef.kind === "host" ? roomRef.hostKey : "";
   // 正解時にサビをブラウザの別タブで自動再生するか（手動モード用）
   const [autoChorus, setAutoChorus] = useState(true);
   // 曲再生用タブへの参照。window.open は必ずフォーカスを奪うので、
@@ -145,10 +151,10 @@ export default function HostView() {
     // ここではビープを鳴らさない。投影画面(/screen)が鳴らすので、同じPCで
     // 両方を開いていると同じスピーカーから2つ鳴り、重なって聞こえる。
     // 早押しは画面表示（回答者名）でも分かるので、音は投影側に一本化する。
-    const onConnect = () => {
-      setConnected(true);
-      socket.emit("role:host"); // 曲データを受け取るために名乗る
-    };
+    //
+    // 曲データを受け取れるかどうかは、ハンドシェイクで渡した主催キーで決まる。
+    // 繋がり直しても役割を名乗る必要はない（名乗りで権限が付くと参加者に真似される）。
+    const onConnect = () => setConnected(true);
     const onDisconnect = () => setConnected(false);
     socket.on("state", onState);
     socket.on("connect", onConnect);
@@ -254,6 +260,8 @@ export default function HostView() {
     }
   }, [revealed, playing, suspense, mode, yt, index]);
 
+  if (roomMissing) return <RoomMissing what="管理画面のURL" />;
+
   if (!armed) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
@@ -272,7 +280,7 @@ export default function HostView() {
         </button>
         <p className="max-w-md text-center text-neutral-400">
           クリックすると早押しのビープ音が鳴らせるようになります。
-          投影用の画面は別ウィンドウで <code className="text-neutral-200">/screen</code> を開いてください。
+          投影用の画面は、この先の「投影画面を開く」から開けます。
         </p>
       </div>
     );
@@ -294,7 +302,7 @@ export default function HostView() {
           <button
             onClick={(e) => {
               e.currentTarget.blur();
-              window.open("/screen", SCREEN_WIN);
+              window.open(screenPath(hostKey), SCREEN_WIN);
               window.focus(); // 操作は管理画面に戻す
             }}
             className="rounded-lg border border-neutral-600 px-3 py-1 text-neutral-300 hover:bg-neutral-800"
@@ -305,6 +313,8 @@ export default function HostView() {
           <ModeToggle mode={mode} onChange={stopPlayback} />
         </div>
       </div>
+
+      <RoomBar roomCode={state.roomCode} hostKey={hostKey} />
 
       {canRestore && saved && (
         <div className="rounded-2xl border-2 border-sky-500 bg-sky-950/60 p-4 text-sky-100">
@@ -889,6 +899,96 @@ function YtBtn({
     >
       {label}
     </button>
+  );
+}
+
+/**
+ * 部屋の案内。参加コード・参加URL・QR と、この管理画面へ戻るためのURL。
+ *
+ * ログインが無いので、管理URL（主催キー入り）を失うと部屋に戻る手段が無い。
+ * そこを画面の上に置いて、コピーできるようにしておく。
+ * QR は準備中しか要らないので、既定では畳んでおく。
+ */
+function RoomBar({ roomCode, hostKey }: { roomCode: string; hostKey: string }) {
+  const [joinUrl, setJoinUrl] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
+
+  useEffect(() => {
+    if (!roomCode) return;
+    fetch(`/api/url?room=${encodeURIComponent(roomCode)}`)
+      .then((r) => r.json())
+      .then((d: { url?: string }) => d.url && setJoinUrl(d.url))
+      .catch(() => {});
+  }, [roomCode]);
+
+  const hostUrl = window.location.origin + hostPath(hostKey);
+
+  async function copy(label: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(label);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      // クリップボードが使えない環境（http の実機など）では、選択してもらう
+      window.prompt("コピーしてください", text);
+    }
+  }
+
+  if (!roomCode) return null;
+
+  return (
+    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div>
+          <span className="pr-2 text-sm text-neutral-500">参加コード</span>
+          <span className="text-2xl font-black tracking-[0.2em]">{roomCode}</span>
+        </div>
+        <button
+          onClick={(e) => {
+            e.currentTarget.blur();
+            void copy("join", joinUrl || window.location.origin);
+          }}
+          className="rounded-lg border border-neutral-600 px-3 py-1 text-sm text-neutral-300 hover:bg-neutral-800"
+        >
+          {copied === "join" ? "コピーしました" : "参加URLをコピー"}
+        </button>
+        <button
+          onClick={(e) => {
+            e.currentTarget.blur();
+            setShowQr((v) => !v);
+          }}
+          className="rounded-lg border border-neutral-600 px-3 py-1 text-sm text-neutral-300 hover:bg-neutral-800"
+        >
+          {showQr ? "QRを隠す" : "QRを出す"}
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={(e) => {
+            e.currentTarget.blur();
+            void copy("host", hostUrl);
+          }}
+          className="rounded-lg border border-amber-700 px-3 py-1 text-sm text-amber-200 hover:bg-amber-950"
+        >
+          {copied === "host" ? "コピーしました" : "管理URLをコピー"}
+        </button>
+      </div>
+      <p className="pt-2 text-xs text-neutral-500">
+        参加者に配るのは
+        <span className="px-1 text-neutral-300">{joinUrl || "参加URL"}</span>
+        だけ。管理URLは答えが見えるので渡さないこと。
+        <strong className="pl-1 text-amber-300">
+          管理URLを控えておかないと、この部屋には戻れません。
+        </strong>
+      </p>
+      {showQr && (
+        <img
+          src={`/qr.png?room=${encodeURIComponent(roomCode)}`}
+          alt="参加用QR"
+          className="mt-3 w-48 rounded-xl bg-white p-2"
+        />
+      )}
+    </div>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { RoomMissing, useRoomMissing } from "./RoomMissing";
 import { socket } from "./socket";
 import { useCountdown } from "./useCountdown";
 import type { JoinAck, State } from "./types";
@@ -54,6 +55,7 @@ export default function PlayerView() {
   const [state, setState] = useState<State>(EMPTY);
   const [myId, setMyId] = useState<string | null>(null);
   const [connected, setConnected] = useState(socket.connected);
+  const roomMissing = useRoomMissing();
 
   // タップ直後にサーバーの返事を待たずボタンを殺すためのフラグ
   const [pressed, setPressed] = useState(false);
@@ -122,6 +124,9 @@ export default function PlayerView() {
     localStorage.setItem(NAME_KEY, n);
     setName(n);
   }
+
+  // 部屋が無いと言われたら、名前を聞く前に打ち切る
+  if (roomMissing) return <RoomMissing what="参加コード" />;
 
   if (!name) {
     return (
