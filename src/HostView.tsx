@@ -178,11 +178,16 @@ export default function HostView() {
 
   // 準備が整う前に再生を要求されていた場合、整った時点で鳴らし直す。
   // これがないと「サーバーは再生中なのに音が出ない」状態のままになる。
+  //
+  // 溜め中は対象外にする。溜めに入った瞬間は playing=true / revealed=false に
+  // なるのでこの条件に合ってしまうが、ここで play() すると「止めた位置から」
+  // 再生が始まり、直後に走る助走のシークがその読み込みに飲まれて効かない。
+  // 溜め中の再生は下の追従効果（助走）に任せる。
   useEffect(() => {
-    if (mode === "youtube" && playing && yt.ready && !revealed) {
+    if (mode === "youtube" && playing && yt.ready && !revealed && !suspense) {
       yt.play(index);
     }
-  }, [yt.ready, mode, playing, revealed, index, yt]);
+  }, [yt.ready, mode, playing, revealed, suspense, index, yt]);
 
   // サーバー状態に合わせてプレイヤーを追従させる
   const prevPlay = useRef({
@@ -190,6 +195,7 @@ export default function HostView() {
     revealed: false,
     playing: false,
     suspense: false,
+    ready: false,
   });
   useEffect(() => {
     if (mode !== "youtube") return;
@@ -199,9 +205,10 @@ export default function HostView() {
     if (p.index !== index) {
       yt.pause(p.index);
       yt.seekToStart(index);
-    } else if (suspense && !p.suspense) {
+    } else if (suspense && yt.ready && (!p.suspense || !p.ready)) {
       // 「正解は…」の溜めに入った。溜めの長さぶん手前から鳴らして助走にする。
       // 溜めが明けて答えが出る瞬間に、ちょうどサビの頭が来る。
+      // 準備前に「正解」を押された場合に備え、準備が整った時点でも拾う。
       yt.seekAndPlay(index, Math.max(0, chorus - state.suspenseMs / 1000));
     } else if (revealed && !p.revealed && !p.suspense) {
       // 溜め無し設定のときだけ、ここでサビへ飛ぶ。
@@ -213,7 +220,7 @@ export default function HostView() {
       yt.pause(index);
     }
 
-    prevPlay.current = { index, revealed, playing, suspense };
+    prevPlay.current = { index, revealed, playing, suspense, ready: yt.ready };
   }, [mode, index, revealed, playing, suspense, state.suspenseMs, yt, song]);
 
   // 答えを消したときはサビも止める。溜め中は鳴らしているので対象外。
