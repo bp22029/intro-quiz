@@ -38,6 +38,8 @@ let playing = false;
 // 手動モードは、埋め込みでは鳴らせないもの（年齢制限つき動画、埋め込み禁止、
 // YouTube 側の仕様変更）に備えた逃げ道として残す。
 let mode: PlayMode = "youtube";
+// 溜めのあいだに助走を鳴らすか。演出なので当日その場で切り替えられるようにする。
+let runUp = true;
 // 全体音量。曲ごとの volume が未設定ならこの値で鳴る。
 // 100 はプレイヤーの最大値で会場では大きすぎることが多いので、控えめから始める。
 let masterVolume = 70;
@@ -148,6 +150,7 @@ function snapshot(): State {
     players: [...players.values()],
     songs,
     suspenseMs,
+    runUp,
     masterVolume,
     round: {
       index,
@@ -412,10 +415,11 @@ io.on("connection", (socket) => {
     clearWrong();
     clearReveal();
     revealed = false;
-    // YouTubeモードでは、溜めのあいだにサビへ向けた助走を鳴らす。
+    // YouTubeモードで助走が有効なら、溜めのあいだから鳴らす。
     // 答えが出る瞬間にサビの頭が来るので、そこが山になる。
-    // 手動モードは別タブ側の都合があるので従来どおり止めたまま。
-    playing = mode === "youtube";
+    // 無効なら溜めは無音のまま、答えが出てからサビへ飛ぶ。
+    // 手動モードは別タブ側の都合があるので常に止めたまま。
+    playing = mode === "youtube" && runUp;
     // まず「正解は…」を出し、溜めてから答えを見せる
     if (suspenseMs <= 0) {
       // 溜めなし。すぐ答えを出す
@@ -491,6 +495,12 @@ io.on("connection", (socket) => {
   });
 
   /** 「正解は…」の長さを変える。当日の進行に合わせて調整できるように */
+  socket.on("host:setRunUp", (raw: unknown) => {
+    runUp = raw === true;
+    console.log(`[host] runUp=${runUp}`);
+    broadcastState();
+  });
+
   socket.on("host:setMasterVolume", (raw: unknown) => {
     const n = Number(raw);
     if (!Number.isFinite(n)) return;

@@ -28,6 +28,11 @@ export type YouTubeController = {
   seekAndPlay: (index: number, sec: number) => void;
   /** 曲ごとの音量を即座に反映する（0-100）。スライダー用 */
   setVolume: (index: number, value: number) => void;
+  /**
+   * 指定秒へジャンプし、小さい音量から ms ミリ秒かけて本来の音量まで上げながら再生する。
+   * 「正解は…」の溜めのあいだの助走に使う。曲がぬるっと立ち上がってくる。
+   */
+  fadeInAndPlay: (index: number, sec: number, ms: number) => void;
 };
 
 /** その曲を鳴らす音量。曲に設定が無ければ全体音量に従う */
@@ -98,6 +103,8 @@ export function useYouTube(
   const songsRef = useRef(songs);
   // 再生のたびに最新の値を読む。ここが変わってもプレイヤーは作り直さない。
   const masterRef = useRef(masterVolume);
+  // フェードイン中のタイマー。別の操作が入ったら必ず止める。
+  const fadeTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const generationRef = useRef(0);
 
   const [refVersion, setRefVersion] = useState(0);
@@ -217,6 +224,10 @@ export function useYouTube(
 
     return () => {
       cancelled = true;
+      if (fadeTimer.current !== null) {
+        clearInterval(fadeTimer.current);
+        fadeTimer.current = null;
+      }
       createdPlayers.forEach((player) => {
         try {
           player?.destroy();
@@ -241,12 +252,21 @@ export function useYouTube(
     return playersRef.current[index] ?? null;
   }, []);
 
+  /** フェードインを打ち切る。別の再生操作が入るたびに呼ぶ */
+  const cancelFade = useCallback((): void => {
+    if (fadeTimer.current !== null) {
+      clearInterval(fadeTimer.current);
+      fadeTimer.current = null;
+    }
+  }, []);
+
   const play = useCallback(
     (index: number): void => {
       const player = getControllablePlayer(index);
       if (!player) return;
 
       try {
+        cancelFade(); // 上げ途中で放置しない
         player.setVolume(volumeOf(songsRef.current[index], masterRef.current));
         player.playVideo();
       } catch {
@@ -262,6 +282,7 @@ export function useYouTube(
       if (!player) return;
 
       try {
+        cancelFade();
         player.pauseVideo();
       } catch {
         // 未準備などのAPI例外は画面操作へ波及させない。
@@ -276,6 +297,7 @@ export function useYouTube(
       if (!player) return;
 
       try {
+        cancelFade();
         player.setVolume(volumeOf(songsRef.current[index], masterRef.current));
         player.seekTo(Math.max(0, sec), true);
         player.playVideo();
@@ -286,18 +308,55 @@ export function useYouTube(
     [getControllablePlayer],
   );
 
+  const fadeInAndPlay = useCallback(
+    (index: number, sec: number, ms: number): void => {
+      const player = getControllablePlayer(index);
+      if (!player) return;
+
+      cancelFade();
+      const target = volumeOf(songsRef.current[index], masterRef.current);
+      // 完全な無音から始めると出だしが聞こえないので、少し残して始める
+      const from = Math.round(target * 0.15);
+      const stepMs = 100;
+      const steps = Math.max(1, Math.round(ms / stepMs));
+
+      try {
+        player.setVolume(from);
+        player.seekTo(Math.max(0, sec), true);
+        player.playVideo();
+      } catch {
+        return; // 未準備などはここで諦める
+      }
+
+      let done = 0;
+      fadeTimer.current = setInterval(() => {
+        done++;
+        const v = Math.round(from + (target - from) * (done / steps));
+        try {
+          player.setVolume(Math.min(target, Math.max(0, v)));
+        } catch {
+          cancelFade();
+          return;
+        }
+        if (done >= steps) cancelFade();
+      }, stepMs);
+    },
+    [getControllablePlayer, cancelFade],
+  );
+
   const setVolume = useCallback(
     (index: number, value: number): void => {
       const player = getControllablePlayer(index);
       if (!player) return;
 
       try {
+        cancelFade(); // スライダーを触ったらフェードより手動を優先する
         player.setVolume(Math.max(0, Math.min(100, Math.round(value))));
       } catch {
         // 未準備などのAPI例外は画面操作へ波及させない。
       }
     },
-    [getControllablePlayer],
+    [getControllablePlayer, cancelFade],
   );
 
   const seekToStart = useCallback(
@@ -306,6 +365,8 @@ export function useYouTube(
       if (!player) return;
 
       try {
+        cancelFade();
+        player.setVolume(volumeOf(songsRef.current[index], masterRef.current));
         player.seekTo(songsRef.current[index].startSec, true);
         player.pauseVideo();
       } catch {
@@ -328,6 +389,7 @@ export function useYouTube(
     seekToStart,
     seekAndPlay,
     setVolume,
+    fadeInAndPlay,
   };
 }
 

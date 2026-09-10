@@ -24,6 +24,10 @@ export type State = {
   mode: PlayMode;
   songs: Song[]; // 管理画面から編集できるので state に載せる（参加者には空で配る）
   suspenseMs: number; // 「正解は…」の長さ（ミリ秒）
+  // 「正解は…」の溜めのあいだにサビへの助走を鳴らすか。
+  // true なら溜めの長さぶん手前から、音量を上げながら再生する。
+  // false なら従来どおり溜めは無音で、答えが出てからサビへ飛ぶ。
+  runUp: boolean;
   // 全体音量（0-100）。volume を持たない曲はこの値で鳴る。
   // 曲ごとに合わせる前に、まずここで全体を下げられるようにするための逃げ道。
   masterVolume: number;

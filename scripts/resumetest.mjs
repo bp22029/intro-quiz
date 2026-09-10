@@ -137,6 +137,35 @@ await wait(2000 + D * 2);
 check("溜め明けに答えが出る", hostState.state?.round?.revealed === true);
 check("答えが出た後も鳴り続ける", hostState.state?.round?.playing === true);
 
+// 助走を切ると、溜めは無音のまま（従来の挙動）
+host.emit("host:setRunUp", false);
+host.emit("host:setSong", 0);
+await wait(D);
+check("助走を切れる", hostState.state?.runUp === false);
+host.emit("host:reveal");
+await wait(D);
+check(
+  "助走を切ると溜め中は鳴らさない",
+  hostState.state?.round?.playing === false,
+);
+check("助走を切っても溜めには入る", hostState.state?.round?.revealInMs > 0);
+await wait(2000 + D * 2);
+check(
+  "助走を切っても答え表示ではサビが鳴る",
+  hostState.state?.round?.playing === true,
+);
+
+host.emit("host:setRunUp", true);
+await wait(D);
+check("助走を戻せる", hostState.state?.runUp === true);
+
+// 不正な値は真偽値として扱う（true 以外は false）
+host.emit("host:setRunUp", "はい");
+await wait(D);
+check("真偽値でない指定は false になる", hostState.state?.runUp === false);
+host.emit("host:setRunUp", true);
+await wait(D);
+
 // 手動モードでは助走を鳴らさない（別タブ側の都合があるため）
 host.emit("host:setMode", "manual");
 host.emit("host:setSong", 0);

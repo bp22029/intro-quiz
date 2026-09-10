@@ -30,6 +30,7 @@ const EMPTY: State = {
   mode: "youtube",
   songs: [],
   suspenseMs: 2000,
+  runUp: true,
   masterVolume: 70,
 };
 
@@ -89,6 +90,7 @@ export default function HostView() {
 
 
   const suspense = revealInMs > 0 && !revealed; // 「正解は…」の溜め中
+  const runUp = state.runUp; // 溜め中にサビへの助走を鳴らすか
   const mode = state.mode;
   const song = songs[index];
   const buzzed = state.buzzedBy;
@@ -197,22 +199,33 @@ export default function HostView() {
     suspense: false,
     ready: false,
   });
+  // この問題で助走を鳴らしたか。鳴らしたなら答え表示でサビへ飛ばさない
+  // （飛ばすと助走ぶん巻き戻ってしまう）。
+  const ranUp = useRef(false);
   useEffect(() => {
     if (mode !== "youtube") return;
     const p = prevPlay.current;
     const chorus = song?.chorusSec ?? song?.startSec ?? 0;
+    // 答えも溜めも出ていない状態に戻ったら、助走の記録を捨てる
+    if (!revealed && !suspense) ranUp.current = false;
 
     if (p.index !== index) {
       yt.pause(p.index);
       yt.seekToStart(index);
-    } else if (suspense && yt.ready && (!p.suspense || !p.ready)) {
-      // 「正解は…」の溜めに入った。溜めの長さぶん手前から鳴らして助走にする。
+      ranUp.current = false;
+    } else if (runUp && suspense && yt.ready && (!p.suspense || !p.ready)) {
+      // 「正解は…」の溜めに入った。溜めの長さぶん手前から、音量を上げながら鳴らす。
       // 溜めが明けて答えが出る瞬間に、ちょうどサビの頭が来る。
       // 準備前に「正解」を押された場合に備え、準備が整った時点でも拾う。
-      yt.seekAndPlay(index, Math.max(0, chorus - state.suspenseMs / 1000));
-    } else if (revealed && !p.revealed && !p.suspense) {
-      // 溜め無し設定のときだけ、ここでサビへ飛ぶ。
-      // 溜めがあった場合は既に助走中なので、飛ばすと巻き戻ってしまう。
+      yt.fadeInAndPlay(
+        index,
+        Math.max(0, chorus - state.suspenseMs / 1000),
+        state.suspenseMs,
+      );
+      ranUp.current = true;
+    } else if (revealed && !p.revealed && !ranUp.current) {
+      // 助走を鳴らしていない場合だけ、ここでサビへ飛ぶ。
+      // 助走中に飛ばすと、上がってきた音がその分巻き戻ってしまう。
       yt.seekAndPlay(index, chorus);
     } else if (playing && !p.playing) {
       yt.play(index);
@@ -221,7 +234,17 @@ export default function HostView() {
     }
 
     prevPlay.current = { index, revealed, playing, suspense, ready: yt.ready };
-  }, [mode, index, revealed, playing, suspense, state.suspenseMs, yt, song]);
+  }, [
+    mode,
+    index,
+    revealed,
+    playing,
+    suspense,
+    runUp,
+    state.suspenseMs,
+    yt,
+    song,
+  ]);
 
   // 答えを消したときはサビも止める。溜め中は鳴らしているので対象外。
   useEffect(() => {
@@ -627,6 +650,25 @@ export default function HostView() {
             />
             <span className="w-10 shrink-0 text-right tabular-nums text-neutral-300">
               {masterVolume}
+            </span>
+          </label>
+        )}
+
+        {mode === "youtube" && (
+          <label className="mb-4 flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-5 w-5"
+              checked={runUp}
+              onChange={(e) => socket.emit("host:setRunUp", e.target.checked)}
+            />
+            <span className="flex-1 text-neutral-300">
+              「正解は…」の溜めから助走を鳴らす
+              <span className="block text-xs text-neutral-500">
+                溜めの長さぶんサビの手前から、音量を上げながら再生します。答えが出る
+                瞬間にサビの頭が来ます。切ると溜めは無音になり、答えが出てから
+                サビへ飛びます。
+              </span>
             </span>
           </label>
         )}

@@ -24,6 +24,7 @@ const EMPTY: State = {
   mode: "youtube",
   songs: [],
   suspenseMs: 2000,
+  runUp: true,
   masterVolume: 70,
 };
 
