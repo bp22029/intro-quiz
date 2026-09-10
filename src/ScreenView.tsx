@@ -168,9 +168,12 @@ export default function ScreenView() {
             <div className="rise rise-3 mt-4 text-[4vw] font-bold leading-tight text-neutral-300">
               {song?.artist ?? ""}
             </div>
-            <div className="rise rise-4 mt-10 inline-block rounded-2xl bg-amber-400 px-10 py-4 text-[2.8vw] font-black text-neutral-900">
-              {song?.owner ?? "?"} さんの推し曲
-            </div>
+            {/* 推した人が空なら帯ごと出さない。持ち寄りでない曲もあるため */}
+            {song?.owner && (
+              <div className="rise rise-4 mt-10 inline-block rounded-2xl bg-amber-400 px-10 py-4 text-[2.8vw] font-black text-neutral-900">
+                {song.owner} さんの推し曲
+              </div>
+            )}
             {buzzed && (
               <div className="rise rise-4 mt-8 text-4xl text-emerald-400">
                 正解者: {buzzed.name} さん

@@ -283,9 +283,11 @@ export default function HostView() {
           {song?.title ?? "（曲データなし）"}
         </div>
         <div className="text-xl text-neutral-300">{song?.artist ?? ""}</div>
-        <div className="mt-1 text-lg text-amber-300">
-          {song?.owner ? `${song.owner} さんの推し曲` : ""}
-        </div>
+        {song?.owner && (
+          <div className="mt-1 text-lg text-amber-300">
+            {song.owner} さんの推し曲
+          </div>
+        )}
         {mode === "manual" && song && song.videoId && (
           // 手動モード専用。外部の YouTube タブを t= 付きで開く。
           // YouTubeモードでは画面内のプレイヤーが鳴らすので出さない。
