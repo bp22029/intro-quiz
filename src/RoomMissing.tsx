@@ -21,18 +21,18 @@ export function useRoomMissing(): boolean {
 
 export function RoomMissing({ what }: { what: string }) {
   return (
-    <div className="mx-auto flex h-full max-w-md flex-col justify-center gap-6 p-8 text-center">
-      <h1 className="text-3xl font-bold">部屋が見つかりません</h1>
-      <p className="text-neutral-400">
+    <div className="mx-auto flex h-full w-full max-w-md flex-col justify-center gap-6 p-7 text-center">
+      <h1 className="text-3xl font-black text-gold-bright">部屋が見つかりません</h1>
+      <p className="text-ink-2">
         {what}
         が違うか、部屋がもう終了しています。
       </p>
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm leading-relaxed text-ink-3">
         部屋はサーバーのメモリにしか無いので、誰も居ない状態が続くと片付けられます。
         サーバーを再起動したときも消えます。
       </p>
       <a
-        className="rounded-xl bg-neutral-800 px-5 py-4 text-xl font-bold active:bg-neutral-700"
+        className="rounded-r2 border border-chip bg-sink px-5 py-4 text-xl font-bold no-underline active:bg-panel"
         href="/"
       >
         最初の画面へ

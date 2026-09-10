@@ -130,11 +130,21 @@ export default function PlayerView() {
 
   if (!name) {
     return (
-      <div className="flex h-full flex-col justify-center gap-6 p-8">
-        <h1 className="text-3xl font-bold">イントロクイズ</h1>
-        <p className="text-neutral-400">名前を入れて参加してください</p>
+      <div className="mx-auto flex h-full w-full max-w-md flex-col justify-center gap-6 p-7">
+        <div className="flex flex-col gap-3">
+          <div className="text-[15px] tracking-[0.4em] text-gold">
+            <span className="pl-[0.4em]">イントロクイズ</span>
+          </div>
+          {state.roomCode && (
+            <div className="font-disp text-5xl leading-none tracking-[0.1em] text-gold-bright">
+              {state.roomCode}
+            </div>
+          )}
+        </div>
+        <div className="h-px bg-gradient-to-r from-gold to-transparent opacity-60" />
+        <p className="text-ink-3">名前を入れて参加してください</p>
         <input
-          className="rounded-xl bg-neutral-800 px-5 py-5 text-2xl outline-none focus:ring-2 focus:ring-red-500"
+          className="rounded-r2 border border-chip bg-sink px-5 py-4 text-2xl outline-none focus:ring-2 focus:ring-gold"
           value={draft}
           maxLength={12}
           autoFocus
@@ -145,13 +155,13 @@ export default function PlayerView() {
           }}
         />
         <button
-          className="rounded-xl bg-red-600 px-5 py-5 text-2xl font-bold active:bg-red-700"
+          className="rounded-r2 bg-gold px-5 py-5 text-2xl font-black text-ground active:bg-gold-bright"
           onClick={submitName}
         >
           {myId ? "この名前にする" : "参加する"}
         </button>
         {myId && (
-          <p className="text-center text-sm text-neutral-500">
+          <p className="text-center text-sm text-ink-3">
             名前を変えても、この曲のお手つきは解除されません
           </p>
         )}
@@ -169,30 +179,70 @@ export default function PlayerView() {
   // 表示は state を素直に描くが、pressed のときだけローカル優先で先に殺す
   const disabled = pressed || !!state.buzzedBy || iAmLocked || showWrong;
 
-  let label: string;
-  let color: string;
-  if (showWrong) {
+  // 状態ごとに面の色と中身を決める。文字を1本の文字列で切り替えていたのを
+  // やめたのは、「不正解のカウントダウン」だけ大きさの違う3行が要るため。
+  //
+  // 金＝押せる / 深緑＝あなたが押した / 沈めた紺＝押せない / 深紅＝不正解。
+  // 押せるボタンに赤を使わないのは、赤を不正解の色として通すため。
+  let face: string;
+  let body: React.ReactNode;
+  const dim = "bg-sink border-chip-locked";
+  if (showWrong && countdown > 0) {
     // サーバーがこの間 buzz を弾くので、押せないことを画面でも明示する
-    label =
-      countdown > 0
-        ? `不正解\n${state.round.wrongName}さん\n\n${countdown}`
-        : "再開！";
-    color = countdown > 0 ? "bg-red-800" : "bg-neutral-700";
+    face = "bg-miss border-miss-border";
+    body = (
+      <>
+        <div className="text-5xl font-black text-miss-ink">不正解</div>
+        <div className="pt-1.5 text-lg text-miss-ink2">
+          {state.round.wrongName} さん
+        </div>
+        <div className="pt-8 font-disp text-[8rem] leading-none tabular-nums">
+          {countdown}
+        </div>
+      </>
+    );
+  } else if (showWrong) {
+    face = dim;
+    body = <div className="text-6xl font-black text-gold">再開！</div>;
   } else if (iAmBuzzed) {
-    label = "あなた！";
-    color = "bg-green-600";
+    face = "bg-win border-gold-bright";
+    body = (
+      <>
+        <div className="text-[17px] tracking-[0.4em] text-gold-bright">
+          <span className="pl-[0.4em]">あなたです</span>
+        </div>
+        <div className="pt-3 font-disp text-6xl leading-tight">どうぞ</div>
+      </>
+    );
   } else if (someoneElse) {
-    label = `${state.buzzedBy!.name}さんが\n押しました`;
-    color = "bg-neutral-700";
+    face = dim;
+    body = (
+      <div className="text-[42px] font-black leading-[1.35] text-ink-3">
+        {state.buzzedBy!.name} さんが
+        <br />
+        押しました
+      </div>
+    );
   } else if (iAmLocked) {
-    label = "この曲は\nここまで";
-    color = "bg-neutral-700";
+    // 「他の人が押した」とは意味が違う。次の曲まで押せないことを言い切る。
+    face = dim;
+    body = (
+      <>
+        <div className="text-[42px] font-black leading-[1.35] text-ink-3">
+          この曲は
+          <br />
+          ここまで
+        </div>
+        <div className="my-6 h-px w-28 bg-chip" />
+        <div className="text-[15px] text-ink-3">次の曲でまた押せます</div>
+      </>
+    );
   } else if (pressed) {
-    label = "送信中…";
-    color = "bg-neutral-700";
+    face = dim;
+    body = <div className="text-5xl font-black text-ink-3">送信中…</div>;
   } else {
-    label = "押す！";
-    color = "bg-red-600";
+    face = "bg-gold border-gold";
+    body = <div className="font-disp text-[76px] leading-tight text-ground">押す！</div>;
   }
 
   function buzz() {
@@ -204,27 +254,27 @@ export default function PlayerView() {
   }
 
   return (
-    <div className="flex h-full flex-col p-3">
-      <div className="flex items-center justify-between pb-2 text-sm text-neutral-400">
+    <div className="mx-auto flex h-full w-full max-w-md flex-col px-3.5 pb-4 pt-3.5">
+      <div className="flex items-center justify-between pb-2.5">
         <button
-          className="rounded-lg bg-neutral-800 px-3 py-1.5 text-neutral-200 active:bg-neutral-700"
+          className="rounded-full border border-chip px-4 py-1.5 text-[15px] active:bg-sink"
           onClick={() => {
             setDraft(name);
             setName(null); // 名前入力画面へ戻る。clientId は変わらないのでロックは維持される
           }}
         >
-          {name} <span className="text-neutral-500">✎ 変更</span>
+          {name} <span className="pl-1 text-xs text-ink-3">変更</span>
         </button>
         <ConnBadge connected={connected} />
       </div>
       <button
-        className={`w-full flex-1 whitespace-pre-line rounded-3xl text-6xl font-black transition-colors ${color} ${
-          disabled ? "opacity-70" : "active:scale-[0.98]"
+        className={`flex w-full flex-1 flex-col items-center justify-center rounded-r3 border-2 text-center transition-colors ${face} ${
+          disabled ? "" : "active:scale-[0.98]"
         }`}
         disabled={disabled}
         onPointerDown={buzz}
       >
-        {label}
+        {body}
       </button>
     </div>
   );
@@ -232,8 +282,16 @@ export default function PlayerView() {
 
 function ConnBadge({ connected }: { connected: boolean }) {
   return (
-    <span className={`text-sm ${connected ? "text-green-500" : "text-yellow-500"}`}>
-      {connected ? "● 接続中" : "○ 再接続中…"}
+    <span
+      className={`inline-flex items-center gap-1.5 text-[13px] ${
+        connected ? "text-ok" : "text-gold"
+      }`}
+    >
+      {/* 記号文字は環境によって絵文字の字形で出るので、点も自分で描く */}
+      <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true">
+        <circle cx="6" cy="6" r="5" fill={connected ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" />
+      </svg>
+      {connected ? "接続中" : "再接続中…"}
     </span>
   );
 }

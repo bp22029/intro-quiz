@@ -45,8 +45,10 @@ export default function LobbyView() {
   }
 
   return (
-    <div className="mx-auto flex h-full max-w-md flex-col justify-center gap-8 p-8">
-      <h1 className="text-3xl font-bold">イントロクイズ</h1>
+    <div className="mx-auto flex h-full w-full max-w-md flex-col justify-center gap-8 p-7">
+      <div className="text-[15px] tracking-[0.4em] text-gold">
+        <span className="pl-[0.4em]">イントロクイズ</span>
+      </div>
 
       {/*
         出題する側を主にする。参加者は QR か配られたURLから直接部屋へ入るので、
@@ -54,29 +56,29 @@ export default function LobbyView() {
         主催者はここからしか始められない。
       */}
       <div className="flex flex-col gap-3">
-        <p className="text-neutral-400">出題する</p>
+        <p className="text-sm tracking-[0.16em] text-ink-3">出題する</p>
         <button
-          className="rounded-xl bg-red-600 px-5 py-5 text-2xl font-bold active:bg-red-700 disabled:opacity-50"
+          className="rounded-r2 bg-gold px-5 py-5 text-2xl font-black text-ground active:bg-gold-bright disabled:opacity-50"
           onClick={createRoom}
           disabled={creating}
         >
           {creating ? "作成中…" : "新しい部屋を作る"}
         </button>
-        <p className="text-sm text-neutral-500">
+        <p className="text-xs leading-relaxed text-ink-3">
           作ると管理画面のURLが発行されます。ログインが無いので、
-          <strong className="text-neutral-300">
+          <strong className="font-medium text-gold-bright">
             そのURLを控えておかないと部屋に戻れません
           </strong>
           。
         </p>
       </div>
 
-      <div className="flex flex-col gap-3 border-t border-neutral-800 pt-8">
-        <p className="text-neutral-400">参加する</p>
+      <div className="flex flex-col gap-3 border-t border-rule pt-8">
+        <p className="text-sm tracking-[0.16em] text-ink-3">参加する</p>
         <input
           // autoFocus は付けない。スマホでキーボードが開いて、
           // 主となる「新しい部屋を作る」が画面外へ押し出されてしまう。
-          className="rounded-xl bg-neutral-800 px-5 py-4 text-center text-3xl tracking-[0.3em] outline-none focus:ring-2 focus:ring-red-500"
+          className="rounded-r2 border border-chip bg-sink px-5 py-4 text-center text-3xl tracking-[0.3em] outline-none placeholder:text-chip-ink focus:ring-2 focus:ring-gold"
           value={code}
           maxLength={8}
           inputMode="text"
@@ -89,18 +91,20 @@ export default function LobbyView() {
           }}
         />
         <button
-          className="rounded-xl bg-neutral-800 px-5 py-4 text-xl font-bold active:bg-neutral-700"
+          className="rounded-r2 border border-chip bg-sink px-5 py-4 text-xl font-bold active:bg-panel"
           onClick={join}
         >
           参加する
         </button>
-        <p className="text-sm text-neutral-500">
-          ふつうはQRから入ります。QRが読めないときだけ、主催者が読み上げるコードを入れてください
+        <p className="text-xs leading-relaxed text-ink-3">
+          ふつうはQRから入ります。QRが読めないときだけ、主催者が読み上げるコードを入れてください。
         </p>
       </div>
 
       {error && (
-        <p className="rounded-xl bg-red-900/50 px-4 py-3 text-red-200">{error}</p>
+        <p className="rounded-r2 border border-miss-border bg-miss px-4 py-3 text-miss-ink">
+          {error}
+        </p>
       )}
     </div>
   );
