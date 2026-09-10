@@ -100,6 +100,15 @@ export default function HostView() {
   const masterVolume = state.masterVolume;
   const yt = useYouTube(songs, mode === "youtube", masterVolume);
   const ytError: number | undefined = yt.errors[index];
+  // 前回この端末で使った曲リスト。サーバーが初期値に戻っていたら復元を勧める。
+  const [saved] = useState<Song[] | null>(() => loadSavedSongs());
+  const [dismissRestore, setDismissRestore] = useState(false);
+  const canRestore =
+    saved !== null &&
+    !dismissRestore &&
+    songs.length > 0 && // サーバーの状態が届く前は出さない
+    !sameSongs(saved, songs);
+
   // 音量スライダーの下書き。離した時点で songs へ保存する。
   const [volumeDraft, setVolumeDraft] = useState<number | null>(null);
   // この曲だけの設定があるか。無ければ全体音量に従う。
@@ -251,6 +260,39 @@ export default function HostView() {
           <ModeToggle mode={mode} onChange={stopPlayback} />
         </div>
       </div>
+
+      {canRestore && saved && (
+        <div className="rounded-2xl border-2 border-sky-500 bg-sky-950/60 p-4 text-sky-100">
+          <div className="font-bold">
+            前回この端末で使った曲リストがあります（{saved.length}曲）
+          </div>
+          <div className="mt-1 text-sm text-sky-200">
+            サーバーを再起動すると曲は初期値に戻ります。今のリスト（
+            {songs.length}曲）と違うので、必要なら戻せます。
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={(e) => {
+                e.currentTarget.blur();
+                socket.emit("host:setSongs", saved);
+                setDismissRestore(true);
+              }}
+              className="rounded-lg bg-sky-600 px-4 py-2 font-bold text-neutral-950 hover:bg-sky-500"
+            >
+              前回のリストに戻す
+            </button>
+            <button
+              onClick={(e) => {
+                e.currentTarget.blur();
+                setDismissRestore(true);
+              }}
+              className="rounded-lg border border-sky-700 px-4 py-2 text-sky-200 hover:bg-sky-900"
+            >
+              今のままでよい
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 早押し状況 */}
       <div
@@ -728,6 +770,7 @@ export default function HostView() {
             }
             onApply={() => {
               socket.emit("host:setSongs", draft);
+              saveSongs(draft); // サーバーが再起動しても取り戻せるようにする
               setDraft(null);
             }}
             onCancel={() => setDraft(null)}
@@ -848,6 +891,10 @@ function SongEditor({
 }) {
   // 行ごとの取得状態。"…取得中" と失敗理由を出すために持つ。
   const [meta, setMeta] = useState<Record<number, string>>({});
+  // JSON読み込み欄
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState("");
 
   const update = (i: number, patch: Partial<Song>) =>
     setDraft((prev) => prev.map((s, k) => (k === i ? { ...s, ...patch } : s)));
@@ -1016,16 +1063,74 @@ function SongEditor({
           try {
             await navigator.clipboard.writeText(json);
             alert(
-              "JSONをコピーしました。public/songs.json に貼り付けると、サーバー再起動後も残ります。",
+              "JSONをコピーしました。テキストとして保存しておけば、別のPCからでも読み込めます。手元で動かしているなら public/songs.json に貼ると初期値にできます。",
             );
           } catch {
-            window.prompt("コピーして public/songs.json に貼り付けてください", json);
+            window.prompt("コピーして保存してください", json);
           }
         }}
         className="rounded-xl border border-neutral-700 py-2 text-sm text-neutral-400 hover:bg-neutral-800"
       >
-        JSONとしてコピー（songs.json に貼れば再起動後も残ります）
+        JSONとして書き出す
       </button>
+
+      {/*
+        読み込み。書き出しだけあって読み込みが無いと、別のPCへ曲リストを
+        持ち込めない。サーバーは曲を保存しないので、ここが実質の持ち運び手段になる。
+      */}
+      {importOpen ? (
+        <div className="flex flex-col gap-2 rounded-xl border border-neutral-700 p-3">
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder='[{"videoId":"...","title":"...","artist":"...","owner":"","startSec":0,"chorusSec":43}]'
+            rows={6}
+            className="w-full rounded-lg bg-neutral-800 p-2 font-mono text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-600"
+          />
+          {importError && (
+            <div className="text-sm text-red-400">{importError}</div>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={(e) => {
+                e.currentTarget.blur();
+                const r = parseSongsJson(importText);
+                if (!r.ok) {
+                  setImportError(r.error);
+                  return;
+                }
+                setDraft(() => r.songs); // 下書きに入れる。「反映する」で確定
+                setImportOpen(false);
+                setImportText("");
+                setImportError("");
+              }}
+              className="flex-1 rounded-lg bg-sky-600 py-2 font-bold text-neutral-950 hover:bg-sky-500"
+            >
+              読み込む（まだ反映されません）
+            </button>
+            <button
+              onClick={(e) => {
+                e.currentTarget.blur();
+                setImportOpen(false);
+                setImportError("");
+              }}
+              className="rounded-lg border border-neutral-700 px-4 text-neutral-300 hover:bg-neutral-800"
+            >
+              やめる
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={(e) => {
+            e.currentTarget.blur();
+            setImportOpen(true);
+          }}
+          className="rounded-xl border border-neutral-700 py-2 text-sm text-neutral-400 hover:bg-neutral-800"
+        >
+          JSONから読み込む
+        </button>
+      )}
     </div>
   );
 }
@@ -1070,6 +1175,90 @@ const YT_TAB = "introquiz-player";
 
 /** 投影画面の窓。同じ名前を使うので、何度押しても窓は増えない */
 const SCREEN_WIN = "introquiz-screen";
+
+/**
+ * 曲リストの控え。サーバーはメモリにしか持たないので、再起動すると初期値へ戻る。
+ * DBを持たない方針は変えたくないので、代わりに操作した本人のブラウザに残す。
+ * 参加者の識別に localStorage を使っているのと同じ考え方。
+ */
+const SONGS_KEY = "introquiz:songs";
+
+/** 保存された曲リストを読む。壊れていたら黙って捨てる */
+function loadSavedSongs(): Song[] | null {
+  try {
+    const raw = localStorage.getItem(SONGS_KEY);
+    if (!raw) return null;
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) && arr.length > 0 ? (arr as Song[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSongs(songs: Song[]): void {
+  try {
+    localStorage.setItem(SONGS_KEY, JSON.stringify(songs));
+  } catch {
+    // 容量超過やプライベートモードでは諦める。進行は止めない。
+  }
+}
+
+/** 中身が同じ曲リストか。復元を勧めるかどうかの判定に使う */
+function sameSongs(a: Song[], b: Song[]): boolean {
+  const key = (list: Song[]) =>
+    JSON.stringify(
+      list.map((s) => [
+        s.videoId,
+        s.title,
+        s.artist,
+        s.owner,
+        s.startSec,
+        s.chorusSec ?? null,
+        s.volume ?? null,
+      ]),
+    );
+  return key(a) === key(b);
+}
+
+/** 貼り付けられた JSON を曲リストにする。失敗したら理由を返す */
+export function parseSongsJson(
+  text: string,
+): { ok: true; songs: Song[] } | { ok: false; error: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false, error: "JSONとして読めません（括弧やカンマを確認）" };
+  }
+  if (!Array.isArray(parsed)) {
+    return { ok: false, error: "配列ではありません（[ ] で囲まれている必要があります）" };
+  }
+  const songs: Song[] = [];
+  for (const raw of parsed) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    const num = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+    };
+    const title = String(o.title ?? "").trim();
+    const videoId = String(o.videoId ?? "").trim();
+    if (!title && !videoId) continue; // 空行は捨てる
+    songs.push({
+      videoId,
+      title,
+      artist: String(o.artist ?? "").trim(),
+      owner: String(o.owner ?? "").trim(),
+      startSec: num(o.startSec),
+      chorusSec: o.chorusSec === undefined || o.chorusSec === null ? undefined : num(o.chorusSec),
+      volume: o.volume === undefined || o.volume === null ? undefined : num(o.volume),
+    });
+  }
+  if (songs.length === 0) {
+    return { ok: false, error: "曲が1つも見つかりません" };
+  }
+  return { ok: true, songs };
+}
 
 /** サビ再生までの待ち時間の保存先。端末ごとに覚えておく */
 const CHORUS_DELAY_KEY = "introquiz:chorusDelay";
