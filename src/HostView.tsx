@@ -40,6 +40,13 @@ export default function HostView() {
   const [draft, setDraft] = useState<Song[] | null>(null);
   const [connected, setConnected] = useState(socket.connected);
   const [armed, setArmed] = useState(false); // 音声解除済みか
+  // この画面でもビープを鳴らすか。既定は鳴らす（聞き逃す方が困るため）。
+  const [hostBeep, setHostBeep] = useState(
+    () => localStorage.getItem(HOST_BEEP_KEY) !== "off",
+  );
+  // socket のハンドラを貼り直さずに最新値を読むための控え
+  const hostBeepRef = useRef(hostBeep);
+  hostBeepRef.current = hostBeep;
   // 正解時にサビをブラウザの別タブで自動再生するか（手動モード用）
   const [autoChorus, setAutoChorus] = useState(true);
   // 曲再生用タブへの参照。window.open は必ずフォーカスを奪うので、
@@ -141,7 +148,10 @@ export default function HostView() {
 
   useEffect(() => {
     const onState = (s: State) => setState(s);
-    const onBuzzed = () => beep(); // 手元でも鳴らす。曲を止める合図
+    // 手元でも鳴らす。曲を止める合図。投影画面と同じPCなら切れる。
+    const onBuzzed = () => {
+      if (hostBeepRef.current) beep();
+    };
     const onConnect = () => {
       setConnected(true);
       socket.emit("role:host"); // 曲データを受け取るために名乗る
@@ -672,6 +682,28 @@ export default function HostView() {
             </span>
           </label>
         )}
+
+        <label className="mb-4 flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5"
+            checked={hostBeep}
+            onChange={(e) => {
+              setHostBeep(e.target.checked);
+              localStorage.setItem(
+                HOST_BEEP_KEY,
+                e.target.checked ? "on" : "off",
+              );
+            }}
+          />
+          <span className="flex-1 text-neutral-300">
+            この画面でもビープを鳴らす
+            <span className="block text-xs text-neutral-500">
+              投影画面も鳴らします。同じPCで両方を開いていると二重に聞こえるので、
+              その場合は切ってください。投影画面を別のPCで開いているなら入れたままに。
+            </span>
+          </span>
+        </label>
 
         <div className="flex flex-wrap gap-4">
           <label className="flex items-center gap-2">
@@ -1324,6 +1356,14 @@ export function parseSongsJson(
 
 /** サビ再生までの待ち時間の保存先。端末ごとに覚えておく */
 const CHORUS_DELAY_KEY = "introquiz:chorusDelay";
+
+/**
+ * この画面でもビープを鳴らすか。投影画面(/screen)も鳴らすので、同じPCで
+ * 両方を開いていると同じスピーカーから2つ鳴って重なって聞こえる。
+ * どのPCで何を開いているかはアプリからは分からないので、操作者に選ばせる。
+ * 端末ごとの好みなのでサーバーには持たせない。
+ */
+const HOST_BEEP_KEY = "introquiz:hostBeep";
 
 function Field({
   label,
