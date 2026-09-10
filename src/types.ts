@@ -5,13 +5,6 @@ export type Player = { id: string; name: string };
 
 export type PlayMode = "youtube" | "manual";
 
-/**
- * 早押しの合図に使う音。
- *   click … 押し込みの物理音が入ったボタン音
- *   tone  … 物理音の無い電子音
- *   synth … Web Audio で組み立てた合成音（音源ファイルが無くても鳴る）
- */
-export type BuzzSound = "click" | "tone" | "synth";
 
 /** 進行状態。管理画面(/host)と投影画面(/screen)を分けたので、サーバーで共有する */
 export type Round = {
@@ -36,8 +29,6 @@ export type State = {
   // true なら溜めの長さぶん手前から、音量を上げながら再生する。
   // false なら従来どおり溜めは無音で、答えが出てからサビへ飛ぶ。
   runUp: boolean;
-  // 早押しの合図に使う音。投影画面が鳴らすので、共有状態として持つ。
-  buzzSound: BuzzSound;
   // 全体音量（0-100）。volume を持たない曲はこの値で鳴る。
   // 曲ごとに合わせる前に、まずここで全体を下げられるようにするための逃げ道。
   masterVolume: number;

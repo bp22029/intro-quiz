@@ -31,7 +31,6 @@ const EMPTY: State = {
   songs: [],
   suspenseMs: 2000,
   runUp: true,
-  buzzSound: "click",
   masterVolume: 70,
 };
 
@@ -676,24 +675,15 @@ export default function HostView() {
         )}
 
         {/*
-          早押しの合図。鳴らすのは投影画面だが、選ぶのは司会なのでここに置く。
-          その場で聴き比べられるよう試聴を付ける（試聴はこの画面から鳴る）。
+          早押しの音の確認。鳴らすのは投影画面だが、参加者に押してもらわずに
+          音が出るか確かめられるよう、ここから試聴できるようにしておく。
         */}
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <span className="text-sm text-neutral-400">早押しの音</span>
-          <select
-            value={state.buzzSound}
-            onChange={(e) => socket.emit("host:setBuzzSound", e.target.value)}
-            className="rounded-lg bg-neutral-800 px-3 py-2 text-neutral-100 outline-none focus:ring-2 focus:ring-sky-600"
-          >
-            <option value="click">ボタン（押し込む音あり）</option>
-            <option value="tone">電子音（押し込む音なし）</option>
-            <option value="synth">合成音（音源ファイル不要）</option>
-          </select>
           <button
             onClick={(e) => {
               e.currentTarget.blur();
-              playBuzz(state.buzzSound);
+              playBuzz();
             }}
             className="rounded-lg border border-neutral-600 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
           >
