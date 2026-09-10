@@ -2,15 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  地と文字は tailwind.config.js のトークンと同じ値。
+  ここは Tailwind のクラスが効かない html / body に当てるためだけに書いている。
+  値を変えるときは必ず両方直すこと（ground と ink）。
+*/
 html,
 body,
 #root {
   height: 100%;
   margin: 0;
-  background: #0a0a0a;
-  color: #fff;
-  font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans",
-    "Noto Sans JP", sans-serif;
+  background: #0a0f1e;
+  color: #f2ede1;
+  font-family: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic",
+    system-ui, sans-serif;
 }
 
 /* スマホでのダブルタップズーム・タップ時のハイライトを殺す（誤操作防止） */

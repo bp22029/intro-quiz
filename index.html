@@ -13,6 +13,18 @@
       入れられると即死するため、ここで明示して固定する。
     -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <!--
+      見出しの書体。読み込めなくても fallback で動くようにしてある
+      （tailwind.config.js の fontFamily に日本語のフォールバックを並べてある）。
+      会場の回線が細いと本番中に字が入れ替わって見えるので、
+      開演前に一度読ませておくこと（RUNBOOK に書いた）。
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap"
+      rel="stylesheet"
+    />
     <title>イントロクイズ</title>
   </head>
   <body>
