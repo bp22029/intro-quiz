@@ -24,6 +24,9 @@ export type State = {
   mode: PlayMode;
   songs: Song[]; // 管理画面から編集できるので state に載せる（参加者には空で配る）
   suspenseMs: number; // 「正解は…」の長さ（ミリ秒）
+  // 全体音量（0-100）。volume を持たない曲はこの値で鳴る。
+  // 曲ごとに合わせる前に、まずここで全体を下げられるようにするための逃げ道。
+  masterVolume: number;
 };
 
 export type JoinAck = { ok: true; id: string; name: string };
@@ -36,7 +39,7 @@ export type Song = {
   owner: string; // この曲を挙げた人
   startSec: number; // イントロ開始位置（秒）
   chorusSec?: number; // サビの開始位置（秒）。答え表示時にここへ飛んで再生する
-  // 再生音量（0-100、既定100）。曲ごとに持つ。
+  // この曲だけの音量（0-100）。未設定なら masterVolume に従う。
   // YouTube のラウドネス正規化は「下げるだけ」で小さい音を持ち上げないため、
   // アートトラック(〇〇 - Topic)とMVを混ぜると音量差が残る。
   volume?: number;

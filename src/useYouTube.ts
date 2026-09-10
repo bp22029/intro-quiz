@@ -30,11 +30,11 @@ export type YouTubeController = {
   setVolume: (index: number, value: number) => void;
 };
 
-/** songs[index].volume を 0-100 に収める。未設定は 100 */
-function volumeOf(song: Song | undefined): number {
+/** その曲を鳴らす音量。曲に設定が無ければ全体音量に従う */
+function volumeOf(song: Song | undefined, master: number): number {
   const v = Number(song?.volume);
-  if (!Number.isFinite(v)) return 100;
-  return Math.max(0, Math.min(100, v));
+  const base = Number.isFinite(v) ? v : master;
+  return Math.max(0, Math.min(100, Number.isFinite(base) ? base : 100));
 }
 
 let apiPromise: Promise<void> | null = null;
@@ -82,7 +82,11 @@ function loadYouTubeApi(): Promise<void> {
 }
 
 /** enabled=false（手動モード）のときはプレイヤーを一切作らない */
-export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
+export function useYouTube(
+  songs: Song[],
+  enabled: boolean,
+  masterVolume: number,
+): YouTubeController {
   const elementsRef = useRef<Array<HTMLDivElement | null>>([]);
   const refCallbacksRef = useRef(
     new Map<number, (el: HTMLDivElement | null) => void>(),
@@ -92,6 +96,8 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
   const errorsRef = useRef<Record<number, number>>({});
   const enabledRef = useRef(enabled);
   const songsRef = useRef(songs);
+  // 再生のたびに最新の値を読む。ここが変わってもプレイヤーは作り直さない。
+  const masterRef = useRef(masterVolume);
   const generationRef = useRef(0);
 
   const [refVersion, setRefVersion] = useState(0);
@@ -100,6 +106,7 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
 
   enabledRef.current = enabled;
   songsRef.current = songs;
+  masterRef.current = masterVolume;
 
   const registerRef = useCallback(
     (index: number): ((el: HTMLDivElement | null) => void) => {
@@ -168,7 +175,9 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
                   videoId: song.videoId,
                   startSeconds: song.startSec,
                 });
-                event.target.setVolume(volumeOf(songsRef.current[index]));
+                event.target.setVolume(
+                  volumeOf(songsRef.current[index], masterRef.current),
+                );
 
                 if (!readyFlagsRef.current[index]) {
                   readyFlagsRef.current[index] = true;
@@ -227,7 +236,7 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
       if (!player) return;
 
       try {
-        player.setVolume(volumeOf(songsRef.current[index]));
+        player.setVolume(volumeOf(songsRef.current[index], masterRef.current));
         player.playVideo();
       } catch {
         // 未準備などのAPI例外は画面操作へ波及させない。
@@ -256,7 +265,7 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
       if (!player) return;
 
       try {
-        player.setVolume(volumeOf(songsRef.current[index]));
+        player.setVolume(volumeOf(songsRef.current[index], masterRef.current));
         player.seekTo(Math.max(0, sec), true);
         player.playVideo();
       } catch {

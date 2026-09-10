@@ -24,6 +24,7 @@ const EMPTY: State = {
   mode: "manual",
   songs: [],
   suspenseMs: 2000,
+  masterVolume: 70,
 };
 
 export default function ScreenView() {

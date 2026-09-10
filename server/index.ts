@@ -33,6 +33,9 @@ let index = 0;
 let revealed = false;
 let playing = false;
 let mode: PlayMode = "manual";
+// 全体音量。曲ごとの volume が未設定ならこの値で鳴る。
+// 100 はプレイヤーの最大値で会場では大きすぎることが多いので、控えめから始める。
+let masterVolume = 70;
 // 早押しで止める直前に鳴っていたか。お手つきの3秒カウントダウン後、
 // 曲を止めた場所から鳴らし直すために覚えておく。
 let playingBeforeBuzz = false;
@@ -140,6 +143,7 @@ function snapshot(): State {
     players: [...players.values()],
     songs,
     suspenseMs,
+    masterVolume,
     round: {
       index,
       revealed,
@@ -432,6 +436,14 @@ io.on("connection", (socket) => {
   });
 
   /** 「正解は…」の長さを変える。当日の進行に合わせて調整できるように */
+  socket.on("host:setMasterVolume", (raw: unknown) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return;
+    masterVolume = Math.max(0, Math.min(100, Math.round(n)));
+    console.log(`[host] masterVolume=${masterVolume}`);
+    broadcastState();
+  });
+
   socket.on("host:setSuspense", (raw: unknown) => {
     const n = Number(raw);
     if (!Number.isFinite(n)) return;

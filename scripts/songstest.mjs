@@ -114,12 +114,51 @@ host.emit("host:setSongs", [
 await wait(D);
 check("音量が保存される", screen.lastState.songs[0].volume === 40);
 check(
-  "未指定の音量は undefined のまま（既定100として扱う）",
+  "未指定の音量は undefined のまま（全体音量に従う）",
   screen.lastState.songs[1].volume === undefined,
 );
 check("100を超える音量は100に丸められる", screen.lastState.songs[2].volume === 100);
 check("負の音量は0に丸められる", screen.lastState.songs[3].volume === 0);
 check("数値でない音量は0に丸められる", screen.lastState.songs[4].volume === 0);
+
+// 全体音量。曲ごとに設定していない曲はこの値で鳴るので、
+// 「1曲ずつ触らないと下がらない」状態にならないことを確かめる。
+check("全体音量の既定は100ではない", screen.lastState.masterVolume === 70);
+
+host.emit("host:setMasterVolume", 35);
+await wait(D);
+check("全体音量が反映される", screen.lastState.masterVolume === 35);
+
+host.emit("host:setMasterVolume", 500);
+await wait(D);
+check("100を超える全体音量は100に丸められる", screen.lastState.masterVolume === 100);
+
+host.emit("host:setMasterVolume", -10);
+await wait(D);
+check("負の全体音量は0に丸められる", screen.lastState.masterVolume === 0);
+
+host.emit("host:setMasterVolume", "abc");
+await wait(D);
+check("数値でない全体音量は無視される", screen.lastState.masterVolume === 0);
+
+host.emit("host:setMasterVolume", 70); // 既定へ戻す
+await wait(D);
+check("全体音量を戻せる", screen.lastState.masterVolume === 70);
+
+// 曲ごとの設定を消すと、全体音量に戻る（管理画面の「全体に戻す」相当）
+host.emit("host:setSongs", [
+  { videoId: "ovr00001", title: "上書きあり", startSec: 0, volume: 20 },
+]);
+await wait(D);
+check("上書きが入る", screen.lastState.songs[0].volume === 20);
+host.emit("host:setSongs", [
+  { videoId: "ovr00001", title: "上書きあり", startSec: 0 },
+]);
+await wait(D);
+check(
+  "上書きを外すと未設定へ戻る（全体音量に従う）",
+  screen.lastState.songs[0].volume === undefined,
+);
 
 // 後片付け: 元の曲リストへ戻す
 host.emit("host:setSongs", original);

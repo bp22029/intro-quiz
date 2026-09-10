@@ -30,6 +30,7 @@ const EMPTY: State = {
   mode: "manual",
   songs: [],
   suspenseMs: 2000,
+  masterVolume: 70,
 };
 
 export default function HostView() {
@@ -96,11 +97,14 @@ export default function HostView() {
   const showWrong = wrongName !== null;
 
   // YouTubeモードのときだけプレイヤーを作る（手動モードでは1つも作らない）
-  const yt = useYouTube(songs, mode === "youtube");
+  const masterVolume = state.masterVolume;
+  const yt = useYouTube(songs, mode === "youtube", masterVolume);
   const ytError: number | undefined = yt.errors[index];
   // 音量スライダーの下書き。離した時点で songs へ保存する。
   const [volumeDraft, setVolumeDraft] = useState<number | null>(null);
-  const shownVolume = volumeDraft ?? song?.volume ?? 100;
+  // この曲だけの設定があるか。無ければ全体音量に従う。
+  const hasOwnVolume = song?.volume !== undefined;
+  const shownVolume = volumeDraft ?? song?.volume ?? masterVolume;
 
   /** 音量の下書きを songs へ書き戻す。スライダーを離したときだけ呼ぶ */
   const saveVolume = useCallback(() => {
@@ -113,6 +117,16 @@ export default function HostView() {
       return null;
     });
   }, [songs, index]);
+
+  /** この曲だけの設定を捨てて、全体音量に従わせる */
+  const clearOwnVolume = useCallback(() => {
+    setVolumeDraft(null);
+    const next = songs.map((s, i) =>
+      i === index ? { ...s, volume: undefined } : s,
+    );
+    socket.emit("host:setSongs", next);
+    yt.setVolume(index, masterVolume);
+  }, [songs, index, masterVolume, yt]);
 
   useEffect(() => {
     const onState = (s: State) => setState(s);
@@ -342,28 +356,48 @@ export default function HostView() {
         音量差が残る。鳴らしながら合わせて、離した時点で songs へ保存する。
       */}
       {mode === "youtube" && song && (
-        <label className="flex items-center gap-3 rounded-2xl bg-neutral-900 px-4 py-3">
-          <span className="shrink-0 text-sm text-neutral-400">音量</span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            value={shownVolume}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setVolumeDraft(v);
-              yt.setVolume(index, v); // 鳴っていれば即座に反映される
-            }}
-            onPointerUp={() => saveVolume()}
-            onKeyUp={() => saveVolume()}
-            onBlur={() => saveVolume()}
-            className="h-2 w-full cursor-pointer"
-          />
-          <span className="w-12 shrink-0 text-right tabular-nums text-neutral-300">
-            {shownVolume}
-          </span>
-        </label>
+        <div className="rounded-2xl bg-neutral-900 px-4 py-3">
+          <label className="flex items-center gap-3">
+            <span className="shrink-0 text-sm text-neutral-400">この曲</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={shownVolume}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setVolumeDraft(v);
+                yt.setVolume(index, v); // 鳴っていれば即座に反映される
+              }}
+              onPointerUp={() => saveVolume()}
+              onKeyUp={() => saveVolume()}
+              onBlur={() => saveVolume()}
+              className="h-2 w-full cursor-pointer"
+            />
+            <span className="w-10 shrink-0 text-right tabular-nums text-neutral-300">
+              {shownVolume}
+            </span>
+          </label>
+          <div className="mt-1 flex items-center justify-between text-xs">
+            <span className="text-neutral-500">
+              {hasOwnVolume
+                ? "この曲だけの設定"
+                : `全体音量に従っています（${masterVolume}）`}
+            </span>
+            {hasOwnVolume && (
+              <button
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  clearOwnVolume();
+                }}
+                className="rounded border border-neutral-700 px-2 py-0.5 text-neutral-400 hover:bg-neutral-800"
+              >
+                全体に戻す
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* 操作ボタン */}
@@ -489,6 +523,34 @@ export default function HostView() {
       {/* 演出の調整。当日その場で耳と目を合わせられるようにする */}
       <div className="rounded-2xl bg-neutral-900 p-4">
         <div className="pb-3 text-neutral-400">演出の調整</div>
+
+        {/*
+          全体音量。曲ごとに設定していない曲はすべてこの値で鳴る。
+          まずここで会場に合わせ、目立つ曲だけ上の「この曲」で直す。
+        */}
+        {mode === "youtube" && (
+          <label className="mb-4 flex items-center gap-3">
+            <span className="shrink-0 text-sm text-neutral-400">全体音量</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={masterVolume}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                socket.emit("host:setMasterVolume", v);
+                // 個別設定の無い曲は即座に反映する
+                if (!hasOwnVolume) yt.setVolume(index, v);
+              }}
+              className="h-2 w-full cursor-pointer"
+            />
+            <span className="w-10 shrink-0 text-right tabular-nums text-neutral-300">
+              {masterVolume}
+            </span>
+          </label>
+        )}
+
         <div className="flex flex-wrap gap-4">
           <label className="flex items-center gap-2">
             <span className="text-sm text-neutral-400">「正解は…」の長さ</span>
