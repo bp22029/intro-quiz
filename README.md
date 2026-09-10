@@ -111,6 +111,16 @@ npm start        # http://localhost:3000 で3画面すべてを配信
 
 `songs.json` が無い場合は `songs.sample.json` にフォールバックするので、クローン直後でも起動はします。
 
+### 埋め込み可否を確認する
+
+サーバーを起動して `/embedcheck.html` を開くと、`songs.json` の全曲について**埋め込み設定（oEmbed）と実際の再生可否（本物のプレイヤー）**を一覧で確認できます。映像も出るので、`startSec` と `chorusSec` の位置合わせも同時にできます。
+
+```
+http://localhost:3000/embedcheck.html
+```
+
+なお `https://www.youtube.com/embed/<videoId>` をアドレスバーに直接貼る確認方法は、**現在は使えません**。YouTube は2025年末から埋め込みプレーヤーが HTTP Referer で自分を名乗ることを必須にしたため、アドレスバーから開くと referrer が付かず、埋め込み可能な動画でも必ずエラー153になります。この確認ページは本物のページとして読み込まれるので referrer が付き、正しく判定できます。
+
 ## 再生モード
 
 管理画面の右上で切り替えます。**既定は「手動」**です。

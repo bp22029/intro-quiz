@@ -6,6 +6,13 @@
       name="viewport"
       content="width=device-width, initial-scale=1, user-scalable=no"
     />
+    <!--
+      YouTube は 2025年末から、埋め込みプレーヤーが HTTP Referer で自分を名乗ることを
+      必須にした。referrer が落ちると全曲がエラー153で再生できなくなる。
+      ブラウザ既定も同じ値だが、リバースプロキシ等で no-referrer / same-origin を
+      入れられると即死するため、ここで明示して固定する。
+    -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>イントロクイズ</title>
   </head>
   <body>

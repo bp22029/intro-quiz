@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      YouTube は 2025年末から、埋め込みプレーヤーが HTTP Referer で自分を名乗ることを
+      必須にした。referrer が付かないと、埋め込み可能な動画でもエラー153になる。
+      アドレスバーに youtube.com/embed/<id> を直接貼る確認方法が使えなくなったのはこのため。
+      このページは本物のページとして読み込まれるので referrer が付き、正しく判定できる。
+    -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>埋め込み確認 — イントロクイズ</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #0a0a0a;
+        color: #e5e5e5;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0 0 4px;
+      }
+      .lead {
+        color: #a3a3a3;
+        font-size: 14px;
+        margin: 0 0 20px;
+      }
+      .summary {
+        margin: 0 0 16px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        background: #171717;
+        font-weight: 700;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th,
+      td {
+        padding: 8px 10px;
+        text-align: left;
+        border-bottom: 1px solid #262626;
+        vertical-align: top;
+      }
+      th {
+        color: #a3a3a3;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .ok {
+        color: #4ade80;
+        font-weight: 700;
+      }
+      .ng {
+        color: #f87171;
+        font-weight: 700;
+      }
+      .wait {
+        color: #a3a3a3;
+      }
+      .muted {
+        color: #737373;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+        margin-top: 28px;
+      }
+      .cell {
+        background: #171717;
+        border-radius: 12px;
+        padding: 10px;
+      }
+      .cell h3 {
+        margin: 0 0 6px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .cell .meta {
+        font-size: 12px;
+        color: #737373;
+        margin-bottom: 8px;
+      }
+      .cell > div[id^="player-"] {
+        aspect-ratio: 16 / 9;
+        width: 100%;
+      }
+      iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        border-radius: 8px;
+      }
+      code {
+        background: #262626;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>埋め込み確認</h1>
+    <p class="lead">
+      <code>songs.json</code> の全曲について、埋め込み設定（oEmbed）と実際の再生可否（本物のプレイヤー）を確認します。
+      映像が見えている曲は、そのまま <code>startSec</code> と <code>chorusSec</code> の位置確認にも使えます。
+    </p>
+
+    <div class="summary" id="summary">読み込み中…</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>曲</th>
+          <th>動画ID</th>
+          <th>oEmbed<br /><span class="muted">埋め込み設定</span></th>
+          <th>プレイヤー<br /><span class="muted">実際の再生</span></th>
+          <th>チャンネル</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <div class="grid" id="grid"></div>
+
+    <script>
+      // useYouTube.ts の ytErrorMessage と同じ対応表を写している。
+      // 片方を変えたらもう片方も直すこと（このページは素のHTMLでTSをimportできない）。
+      function ytErrorMessage(code) {
+        if (code === 101 || code === 150) return "埋め込み再生が禁止されています";
+        switch (code) {
+          case 2:
+            return "動画IDまたはリクエストが不正です";
+          case 5:
+            return "HTML5プレイヤーで再生できません";
+          case 100:
+            return "動画が見つからないか、非公開です";
+          default:
+            return "YouTubeエラー（コード: " + code + "）";
+        }
+      }
+
+      var songs = [];
+      var playerState = {}; // index -> "ok" | "ng"
+
+      function setCell(id, cls, text) {
+        var el = document.getElementById(id);
+        if (el) {
+          el.className = cls;
+          el.textContent = text;
+        }
+      }
+
+      function updateSummary() {
+        var total = songs.length;
+        var ng = 0;
+        var done = 0;
+        for (var i = 0; i < total; i++) {
+          if (playerState[i] === "ng") ng++;
+          if (playerState[i]) done++;
+        }
+        var el = document.getElementById("summary");
+        if (done < total) {
+          el.textContent = "確認中… " + done + " / " + total + " 曲";
+          el.className = "summary";
+        } else if (ng === 0) {
+          el.textContent = "全 " + total + " 曲、再生できます";
+          el.className = "summary ok";
+        } else {
+          el.textContent =
+            total + " 曲中 " + ng + " 曲が再生できません（下の表を確認してください）";
+          el.className = "summary ng";
+        }
+      }
+
+      // 1) oEmbed で埋め込み設定を見る。referrer とは無関係のHTTP APIなので影響を受けない。
+      //    200 = 埋め込み可 / 401 = 埋め込み禁止 / 404 = 動画が無い
+      function checkOembed(i, videoId) {
+        var url =
+          "https://www.youtube.com/oembed?url=" +
+          encodeURIComponent("https://www.youtube.com/watch?v=" + videoId) +
+          "&format=json";
+        fetch(url)
+          .then(function (r) {
+            if (r.status === 401) {
+              setCell("oembed-" + i, "ng", "401 埋め込み禁止");
+              return null;
+            }
+            if (r.status === 404) {
+              setCell("oembed-" + i, "ng", "404 動画が無い");
+              return null;
+            }
+            if (!r.ok) {
+              setCell("oembed-" + i, "ng", String(r.status));
+              return null;
+            }
+            setCell("oembed-" + i, "ok", "200 許可");
+            return r.json();
+          })
+          .then(function (j) {
+            if (j) setCell("channel-" + i, "muted", j.author_name || "-");
+          })
+          .catch(function (e) {
+            setCell("oembed-" + i, "ng", "取得失敗: " + e.message);
+          });
+      }
+
+      // 2) 本物のプレイヤーで読み込む。年齢制限・地域制限もここで初めて分かる。
+      function buildPlayers() {
+        songs.forEach(function (s, i) {
+          new YT.Player("player-" + i, {
+            videoId: s.videoId,
+            playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
+            events: {
+              onReady: function () {
+                if (playerState[i] === "ng") return; // エラーが先に来ていたら上書きしない
+                playerState[i] = "ok";
+                setCell("player-" + i + "-status", "ok", "読み込みOK");
+                updateSummary();
+              },
+              onError: function (e) {
+                playerState[i] = "ng";
+                setCell(
+                  "player-" + i + "-status",
+                  "ng",
+                  ytErrorMessage(Number(e.data)),
+                );
+                updateSummary();
+              },
+            },
+          });
+        });
+
+        // どちらのイベントも来ない曲を放置しない
+        setTimeout(function () {
+          songs.forEach(function (_, i) {
+            if (!playerState[i]) {
+              playerState[i] = "ng";
+              setCell(
+                "player-" + i + "-status",
+                "ng",
+                "応答なし（通信かIDを確認）",
+              );
+            }
+          });
+          updateSummary();
+        }, 20000);
+      }
+
+      function render() {
+        var rows = document.getElementById("rows");
+        var grid = document.getElementById("grid");
+        songs.forEach(function (s, i) {
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" +
+            (i + 1) +
+            "</td><td>" +
+            escapeHtml(s.title || "（曲名なし）") +
+            "<br /><span class='muted'>" +
+            escapeHtml(s.artist || "") +
+            "</span></td><td><code>" +
+            escapeHtml(s.videoId || "-") +
+            "</code></td><td id='oembed-" +
+            i +
+            "' class='wait'>確認中…</td><td id='player-" +
+            i +
+            "-status' class='wait'>確認中…</td><td id='channel-" +
+            i +
+            "' class='muted'>-</td>";
+          rows.appendChild(tr);
+
+          var cell = document.createElement("div");
+          cell.className = "cell";
+          cell.innerHTML =
+            "<h3>" +
+            (i + 1) +
+            ". " +
+            escapeHtml(s.title || "（曲名なし）") +
+            "</h3><div class='meta'>イントロ " +
+            (s.startSec || 0) +
+            "秒〜 / サビ " +
+            (s.chorusSec == null ? "未設定" : s.chorusSec + "秒〜") +
+            "</div><div id='player-" +
+            i +
+            "'></div>";
+          grid.appendChild(cell);
+        });
+      }
+
+      function escapeHtml(v) {
+        return String(v).replace(/[&<>"']/g, function (c) {
+          return {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          }[c];
+        });
+      }
+
+      // songs.json が無いクローンでも動くよう、サンプルへフォールバックする（サーバーと同じ方針）
+      fetch("songs.json")
+        .then(function (r) {
+          return r.ok ? r.json() : fetch("songs.sample.json").then((x) => x.json());
+        })
+        .then(function (arr) {
+          songs = (Array.isArray(arr) ? arr : []).filter(function (s) {
+            return s && s.videoId;
+          });
+          if (songs.length === 0) {
+            document.getElementById("summary").textContent =
+              "songs.json に videoId を持つ曲がありません";
+            return;
+          }
+          render();
+          songs.forEach(function (s, i) {
+            checkOembed(i, s.videoId);
+          });
+          updateSummary();
+
+          var tag = document.createElement("script");
+          tag.src = "https://www.youtube.com/iframe_api";
+          document.head.appendChild(tag);
+        })
+        .catch(function (e) {
+          document.getElementById("summary").textContent =
+            "songs.json を読み込めませんでした: " + e.message;
+        });
+
+      window.onYouTubeIframeAPIReady = buildPlayers;
+    </script>
+  </body>
+</html>
