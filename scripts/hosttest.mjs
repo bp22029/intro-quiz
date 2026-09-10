@@ -1,11 +1,16 @@
 // 管理画面(/host)の操作が投影画面(/screen)へ正しく伝わるかを検証する。
 // 画面を分けたことで、進行状態がサーバー共有になっているのが前提。
 //   node scripts/hosttest.mjs [url]
-import { io } from "socket.io-client";
+import {
+  connectHost,
+  connectPlayer,
+  createRoom,
+  delayFor,
+  wait,
+} from "./roomlib.mjs";
 
 const URL = process.argv[2] || "http://localhost:3000";
-const D = Number(process.env.D) || (URL.startsWith("https") ? 900 : 200);
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const D = delayFor(URL);
 
 const fail = [];
 function check(label, cond) {
@@ -13,30 +18,18 @@ function check(label, cond) {
   if (!cond) fail.push(label);
 }
 
-function mkClient(name) {
-  const s = io(URL, { transports: ["websocket"] });
-  s.lastState = null;
-  s.buzzCount = 0;
-  s.on("state", (st) => (s.lastState = st));
-  s.on("buzzed", () => s.buzzCount++);
-  // 曲データは投影画面と管理画面にだけ配られるので、役割を名乗る
-  return new Promise((res) =>
-    s.on("connect", () => {
-      s.emit("role:host");
-      res(s);
-    }),
-  );
-}
+const room = await createRoom(URL);
 
+/** 参加者。clientId を送らない古い形（名前だけ）も受けられることを兼ねて確かめる */
 async function mkPlayer(name) {
-  const s = await mkClient(name);
+  const s = await connectPlayer(URL, room.code);
   await new Promise((res) => s.emit("join", name, res));
   return s;
 }
 
-// 投影画面 / 管理画面 / 参加者2人
-const screen = await mkClient("screen");
-const host = await mkClient("host");
+// 投影画面 / 管理画面 / 参加者2人。曲データは主催キーで繋いだ2つにだけ届く。
+const screen = await connectHost(URL, room.hostKey);
+const host = await connectHost(URL, room.hostKey);
 const a = await mkPlayer("あきら");
 const b = await mkPlayer("ばんり");
 await wait(D);
@@ -142,7 +135,7 @@ check("一時停止が伝わる", screen.lastState.round.playing === false);
 host.emit("host:setSong", 1);
 host.emit("host:reveal");
 await wait(2200); // 溜めが明けてから
-const late = await mkClient("late-screen");
+const late = await connectHost(URL, room.hostKey);
 await wait(D);
 check("後から開いた画面にも現在の問題が届く", late.lastState.round.index === 1);
 check("後から開いた画面にも答え表示状態が届く", late.lastState.round.revealed === true);

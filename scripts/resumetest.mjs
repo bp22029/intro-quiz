@@ -2,21 +2,22 @@
 // 「3 → 2 → 1 → GO!」は曲もここから再開するという約束なので、
 // 司会が毎回「▶ イントロ再生」を押し直さなくてよいことを確かめる。
 //   node scripts/resumetest.mjs [url]
-import { io } from "socket.io-client";
+import {
+  connectHost,
+  connectPlayer,
+  createRoom,
+  delayFor,
+  wait,
+} from "./roomlib.mjs";
 
 const URL = process.argv[2] || "http://localhost:3000";
-const D = Number(process.env.D) || (URL.startsWith("https") ? 900 : 300);
+const D = delayFor(URL);
 const WRONG_COUNTDOWN_MS = 3000; // server/index.ts と同じ値
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 let ng = 0;
 function check(label, ok) {
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}`);
   if (!ok) ng++;
-}
-
-function connect() {
-  return io(URL, { transports: ["websocket"] });
 }
 
 /** 最新の state を持ち続けるクライアントを作る */
@@ -26,11 +27,12 @@ function watcher(sock) {
   return box;
 }
 
-const host = connect();
-const hostState = watcher(host);
-host.emit("role:host");
+const room = await createRoom(URL);
 
-const player = connect();
+const host = await connectHost(URL, room.hostKey);
+const hostState = watcher(host);
+
+const player = await connectPlayer(URL, room.code);
 const playerState = watcher(player);
 player.emit("join", { name: "そら", clientId: "resume-test-1" });
 

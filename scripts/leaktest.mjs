@@ -1,11 +1,16 @@
 // 参加者に答え（曲名・アーティスト・推した人）が配信されていないことを検証する。
 // 通信内容を覗けば答えが分かる状態だと、出し物として成立しない。
 //   node scripts/leaktest.mjs [url]
-import { io } from "socket.io-client";
+import {
+  connectHost,
+  connectPlayer,
+  createRoom,
+  delayFor,
+  wait,
+} from "./roomlib.mjs";
 
 const URL = process.argv[2] || "http://localhost:3000";
-const D = Number(process.env.D) || (URL.startsWith("https") ? 900 : 250);
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const D = delayFor(URL);
 
 const fail = [];
 function check(label, cond) {
@@ -13,19 +18,10 @@ function check(label, cond) {
   if (!cond) fail.push(label);
 }
 
-function raw() {
-  const s = io(URL, { transports: ["websocket"] });
-  s.frames = [];
-  s.lastState = null;
-  s.on("state", (st) => {
-    s.lastState = st;
-    s.frames.push(JSON.stringify(st));
-  });
-  return new Promise((res) => s.on("connect", () => res(s)));
-}
+const room = await createRoom(URL);
 
-const host = await raw();
-host.emit("role:host");
+// 曲データを受け取れるのは主催キーで繋いだ側だけ
+const host = await connectHost(URL, room.hostKey);
 await wait(D);
 
 // 検出しやすい固有の文字列を仕込む
@@ -45,8 +41,8 @@ host.emit("host:setSongs", [
 await wait(D);
 check("管理画面には曲データが届く", host.lastState.songs[0].title === SECRET_TITLE);
 
-// 参加者として接続（role を名乗らない）
-const player = await raw();
+// 参加者として接続（持っているのは参加コードだけ）
+const player = await connectPlayer(URL, room.code);
 await wait(D);
 await new Promise((res) =>
   player.emit("join", { name: "のぞき見太郎", clientId: "leak-1" }, res),
@@ -72,13 +68,28 @@ check(
   typeof player.lastState.round.index === "number",
 );
 
-// 名乗れば受け取れる（投影画面が動くことの確認）
-const screen = await raw();
-screen.emit("role:screen");
+// ★ 名乗るだけでは受け取れない。
+// 権限はハンドシェイクの主催キーで決まるので、参加者が投影画面や管理画面を
+// 名乗っても曲は届かない。ここが崩れると、参加URLを知っている人が
+// 通信を1回名乗り直すだけで答えを覗ける。
+player.emit("role:host");
+player.emit("role:screen");
+await wait(D);
+check(
+  "参加者が管理画面を名乗っても曲は届かない",
+  player.lastState.songs.length === 0,
+);
+check(
+  "名乗ったあとの全通信にも曲名が含まれない",
+  !player.frames.join("\n").includes(SECRET_TITLE),
+);
+
+// 主催キーで繋げば受け取れる（投影画面が動くことの確認）
+const screen = await connectHost(URL, room.hostKey);
 await wait(D);
 check("投影画面には曲データが届く", screen.lastState.songs[0].title === SECRET_TITLE);
 
-// 後片付け
+// 元に戻せること（管理画面の編集が一方通行でないことの確認）
 host.emit("host:setSongs", original);
 host.emit("host:setSong", 0);
 host.emit("host:restartRound");

@@ -1,10 +1,9 @@
 // 管理画面からの曲リスト編集が、投影画面・参加者へ正しく配られるかを検証する。
 //   node scripts/songstest.mjs [url]
-import { io } from "socket.io-client";
+import { connectHost, createRoom, delayFor, wait } from "./roomlib.mjs";
 
 const URL = process.argv[2] || "http://localhost:3000";
-const D = Number(process.env.D) || (URL.startsWith("https") ? 900 : 250);
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const D = delayFor(URL);
 
 const fail = [];
 function check(label, cond) {
@@ -12,21 +11,11 @@ function check(label, cond) {
   if (!cond) fail.push(label);
 }
 
-function conn() {
-  const s = io(URL, { transports: ["websocket"] });
-  s.lastState = null;
-  s.on("state", (st) => (s.lastState = st));
-  // 曲データは投影画面と管理画面にだけ配られるので、役割を名乗る
-  return new Promise((res) =>
-    s.on("connect", () => {
-      s.emit("role:host");
-      res(s);
-    }),
-  );
-}
+const room = await createRoom(URL);
 
-const screen = await conn();
-const host = await conn();
+// 曲データは主催キーで繋いだ側（投影画面・管理画面）にだけ配られる
+const screen = await connectHost(URL, room.hostKey);
+const host = await connectHost(URL, room.hostKey);
 await wait(D);
 
 const original = screen.lastState.songs;

@@ -1,11 +1,16 @@
 // 「参加者を全員クリア」の挙動を検証する。
 // 期待: もう居ない人は消え、まだ繋がっている人は自動で戻ってくる。
 //   node scripts/cleartest.mjs [url]
-import { io } from "socket.io-client";
+import {
+  connectHost,
+  createRoom,
+  delayFor,
+  joinPlayer,
+  wait,
+} from "./roomlib.mjs";
 
 const URL = process.argv[2] || "http://localhost:3000";
-const D = Number(process.env.D) || (URL.startsWith("https") ? 900 : 300);
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const D = delayFor(URL);
 
 const fail = [];
 function check(label, cond) {
@@ -13,23 +18,17 @@ function check(label, cond) {
   if (!cond) fail.push(label);
 }
 
+// 自分専用の部屋で検証する。他の部屋の参加者は数に入らない。
+const room = await createRoom(URL);
+
 /** 参加者クライアント。実機と同じく rejoin に反応して入り直す */
 async function player(name, clientId) {
-  const s = io(URL, { transports: ["websocket"] });
-  s.lastState = null;
-  s.on("state", (st) => (s.lastState = st));
+  const s = await joinPlayer(URL, room.code, name, clientId);
   s.on("rejoin", () => s.emit("join", { name, clientId }));
-  await new Promise((res) => s.on("connect", res));
-  await new Promise((res) => s.emit("join", { name, clientId }, res));
   return s;
 }
 
-const host = io(URL, { transports: ["websocket"] });
-host.lastState = null;
-host.on("state", (st) => (host.lastState = st));
-await new Promise((r) => host.on("connect", r));
-host.emit("role:host");
-host.emit("host:clearPlayers"); // 前回の残りを掃除してから始める
+const host = await connectHost(URL, room.hostKey);
 await wait(D);
 
 const stay = await player("居残り", "clear-stay");
@@ -68,12 +67,8 @@ stay.emit("buzz");
 await wait(D);
 check("クリア後も早押しできる", host.lastState.buzzedBy?.name === "居残り");
 
-// 後片付け
-host.emit("host:restartRound");
-await wait(D);
+// 後片付けは要らない。この部屋は検証専用で、誰も居なくなれば片付けられる。
 stay.close();
-host.emit("host:clearPlayers");
-await wait(D);
 
 console.log(fail.length ? `\n${fail.length} 件 FAIL` : "\nすべて PASS");
 host.close();

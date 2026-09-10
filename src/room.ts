@@ -47,8 +47,15 @@ export function parseRoomRef(pathname: string): RoomRef {
   return { kind: "lobby" };
 }
 
-/** ページを開いた時点で確定する。以後この参照は変わらない */
-export const roomRef: RoomRef = parseRoomRef(window.location.pathname);
+/**
+ * ページを開いた時点で確定する。以後この参照は変わらない。
+ * 検証スクリプトは Node からこのモジュールを import するので、
+ * window が無い場合はロビー扱いにして読み込みだけは通す。
+ */
+export const roomRef: RoomRef =
+  typeof window === "undefined"
+    ? { kind: "lobby" }
+    : parseRoomRef(window.location.pathname);
 
 /** Socket.IO のハンドシェイクに載せる名乗り。ロビーでは繋がない */
 export function handshakeAuth(ref: RoomRef): Record<string, string> | null {

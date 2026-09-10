@@ -2,33 +2,39 @@
 //   node scripts/loadtest.mjs [url] [人数]
 // 例: node scripts/loadtest.mjs http://localhost:3000 30
 import { io } from "socket.io-client";
+import { createRoom, wait } from "./roomlib.mjs";
 
 const URL = process.argv[2] || "http://localhost:3000";
 const N = Number(process.argv[3] || 30);
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function connect(i) {
-  const s = io(URL, { transports: ["websocket"] });
+const room = await createRoom(URL);
+
+function connect(i, auth) {
+  const s = io(URL, { transports: ["websocket"], auth });
   s.idx = i;
   s.buzzedAt = null;
   s.stateBytes = 0;
   s.on("buzzed", () => (s.buzzedAt = performance.now()));
-  s.on("state", (st) => (s.stateBytes = JSON.stringify(st).length));
+  s.on("state", (st) => {
+    s.lastState = st;
+    s.stateBytes = JSON.stringify(st).length;
+  });
   return new Promise((res, rej) => {
     s.on("connect", () => res(s));
     s.on("connect_error", (e) => rej(e));
   });
 }
 
-console.log(`接続先: ${URL}`);
+const asPlayer = (i) => connect(i, { room: room.code });
+const asHost = (i) => connect(i, { hostKey: room.hostKey });
+
+console.log(`接続先: ${URL}（部屋 ${room.code}）`);
 console.log(`同時接続: ${N}人 + 投影画面 + 管理画面\n`);
 
 const t0 = performance.now();
-const players = await Promise.all(
-  Array.from({ length: N }, (_, i) => connect(i)),
-);
-const screen = await connect(-1);
-const host = await connect(-2);
+const players = await Promise.all(Array.from({ length: N }, (_, i) => asPlayer(i)));
+const screen = await asHost(-1);
+const host = await asHost(-2);
 console.log(`全員の接続完了まで: ${Math.round(performance.now() - t0)} ms`);
 
 // join
@@ -44,9 +50,13 @@ await Promise.all(
 console.log(`全員の参加登録まで: ${Math.round(performance.now() - tJoin)} ms`);
 await wait(1000);
 
-console.log(`1回の state の大きさ: ${screen.stateBytes} バイト`);
+// 参加者には曲データを落として配るので、1通の大きさが違う
+const playerBytes = players[0]?.stateBytes ?? 0;
+console.log(`1回の state の大きさ: 参加者 ${playerBytes} バイト / 投影・管理 ${screen.stateBytes} バイト`);
 console.log(
-  `1回の同報で流れる総量: 約 ${Math.round((screen.stateBytes * (N + 2)) / 1024)} KB\n`,
+  `1回の同報で流れる総量: 約 ${Math.round(
+    (playerBytes * N + screen.stateBytes * 2) / 1024,
+  )} KB\n`,
 );
 
 // --- 全員が同時に押す（最も重い瞬間）を3回試す ---
@@ -69,7 +79,6 @@ for (let r = 0; r < 3; r++) {
     console.log(`${r + 1}回目: 通知が届きませんでした`);
     continue;
   }
-  const winner = screen.stateBytes ? "" : "";
   rounds.push(times);
   console.log(
     `${r + 1}回目: 全${times.length}人に通知 / 最速 ${Math.round(times[0])} ms ` +
@@ -86,10 +95,13 @@ if (all.length) {
   );
 }
 
-// 排他制御が人数を増やしても壊れないこと
+// 排他制御が人数を増やしても壊れないこと。
+// 全員が同時に押したあとでも、押下者は必ず1人になっていなければならない。
 await wait(500);
-const st = screen.stateBytes;
-console.log(`\n押下者は1人だけか: ${st > 0 ? "state 受信済み" : "state 未受信"}`);
+const buzzed = screen.lastState?.buzzedBy;
+console.log(
+  `\n押下者: ${buzzed ? `${buzzed.name} の1人` : "なし（通知が届いていない）"}`,
+);
 
 host.emit("host:restartRound");
 await wait(500);

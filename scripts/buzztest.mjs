@@ -1,23 +1,24 @@
-import { io } from "socket.io-client";
+import {
+  connectHost,
+  connectPlayer,
+  createRoom,
+  delayFor,
+  joinPlayer,
+  wait,
+} from "./roomlib.mjs";
 
 // 引数で接続先を指定できる: node scripts/buzztest.mjs https://xxx.onrender.com
 const URL = process.argv[2] || "http://localhost:3000";
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // リモート検証では往復が乗るので待ちを伸ばす（判定の取りこぼし防止）
-const D = Number(process.env.D) || (URL.startsWith("https") ? 900 : 200);
+const D = delayFor(URL);
+
+// 自分専用の部屋で検証する。他の部屋の参加者は数にも判定にも入らない。
+const room = await createRoom(URL);
 
 let cidSeq = 0;
 function mk(name) {
-  const s = io(URL, { transports: ["websocket"] });
   // 参加者の identity は socket.id ではなく clientId。テストでも同じ形で送る。
-  s.cid = `buzztest-${Date.now()}-${cidSeq++}`;
-  s.lastState = null;
-  s.on("state", (st) => (s.lastState = st));
-  return new Promise((res) => {
-    s.on("connect", () =>
-      s.emit("join", { name, clientId: s.cid }, () => res(s)),
-    );
-  });
+  return joinPlayer(URL, room.code, name, `buzztest-${Date.now()}-${cidSeq++}`);
 }
 
 const fail = [];
@@ -29,12 +30,7 @@ function check(label, cond) {
 const a = await mk("あきら");
 const b = await mk("ばんり");
 const c = await mk("ちひろ");
-const host = io(URL, { transports: ["websocket"] });
-await new Promise((r) => host.on("connect", r));
-await wait(D);
-
-// ロックは切断では消えない（リロード回避策）ので、前回実行の残りを明示的に片付ける
-host.emit("host:restartRound");
+const host = await connectHost(URL, room.hostKey);
 await wait(D);
 
 check("3人 join されている", a.lastState.players.length === 3);
@@ -97,8 +93,7 @@ await wait(D);
 check("切断した参加者が players から消える", a.lastState.players.length === 2);
 
 // --- 未 join は押せない ---
-const ghost = io(URL, { transports: ["websocket"] });
-await new Promise((r) => ghost.on("connect", r));
+const ghost = await connectPlayer(URL, room.code);
 ghost.emit("buzz");
 await wait(D);
 check("未 join のクライアントは押せない", a.lastState.buzzedBy === null);

@@ -1,11 +1,16 @@
 // お手つきした人が、ページを開き直してロックを解除できないことを検証する。
 // 当日に実際に使われた抜け道なので、必ず通ること。
 //   node scripts/relocktest.mjs [url]
-import { io } from "socket.io-client";
+import {
+  connectHost,
+  createRoom,
+  delayFor,
+  joinPlayer,
+  wait,
+} from "./roomlib.mjs";
 
 const URL = process.argv[2] || "http://localhost:3000";
-const D = Number(process.env.D) || (URL.startsWith("https") ? 900 : 250);
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const D = delayFor(URL);
 
 const fail = [];
 function check(label, cond) {
@@ -13,20 +18,12 @@ function check(label, cond) {
   if (!cond) fail.push(label);
 }
 
-/** clientId を指定して参加する。同じ clientId は「同じ端末」を意味する */
-async function join(name, clientId) {
-  const s = io(URL, { transports: ["websocket"] });
-  s.lastState = null;
-  s.on("state", (st) => (s.lastState = st));
-  await new Promise((res) => s.on("connect", res));
-  await new Promise((res) => s.emit("join", { name, clientId }, res));
-  return s;
-}
+const room = await createRoom(URL);
 
-const host = io(URL, { transports: ["websocket"] });
-host.lastState = null;
-host.on("state", (st) => (host.lastState = st));
-await new Promise((r) => host.on("connect", r));
+/** clientId を指定して参加する。同じ clientId は「同じ端末」を意味する */
+const join = (name, clientId) => joinPlayer(URL, room.code, name, clientId);
+
+const host = await connectHost(URL, room.hostKey);
 
 host.emit("host:setSong", 0);
 await wait(D);
