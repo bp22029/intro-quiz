@@ -37,6 +37,54 @@ const EMPTY: State = {
   masterVolume: 70,
 };
 
+/**
+ * ボタンの記号。文字（▶ ● ○ × ✎）は使わない。
+ * 環境によっては絵文字の字形で出てしまい、色も大きさも制御できなくなる。
+ * 色はボタンの文字色を継ぐ（currentColor）。
+ */
+const Ico = {
+  play: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0 fill-current">
+      <path d="M8.4 5.2a1 1 0 0 1 1.5-.9l9.2 6.8a1 1 0 0 1 0 1.8l-9.2 6.8a1 1 0 0 1-1.5-.9z" />
+    </svg>
+  ),
+  pause: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0 fill-current">
+      <path d="M8 5h3.2v14H8zM12.8 5H16v14h-3.2z" />
+    </svg>
+  ),
+  circle: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true" className="shrink-0">
+      <circle cx="12" cy="12" r="8" />
+    </svg>
+  ),
+  cross: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" aria-hidden="true" className="shrink-0">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  ),
+  pencil: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+      <path d="M4 20h4L20 8l-4-4L4 16z" />
+    </svg>
+  ),
+  note: () => (
+    <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" className="shrink-0 fill-current">
+      <path d="M11 4v10.2a3.2 3.2 0 1 0 2 2.96V8h5V4z" />
+    </svg>
+  ),
+  check: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+      <path d="M4 12l6 6L20 6" />
+    </svg>
+  ),
+  dot: (filled: boolean) => (
+    <svg width="9" height="9" viewBox="0 0 12 12" aria-hidden="true" className="shrink-0">
+      <circle cx="6" cy="6" r="5" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" />
+    </svg>
+  ),
+};
+
 export default function HostView() {
   const [state, setState] = useState<State>(EMPTY);
   // 編集用の下書き。入力中にサーバーからの更新で上書きされないよう分けている。
@@ -267,7 +315,7 @@ export default function HostView() {
       <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
         <h1 className="text-4xl font-black">管理画面</h1>
         <button
-          className="rounded-2xl bg-red-600 px-12 py-6 text-3xl font-bold hover:bg-red-500"
+          className="rounded-full bg-gold px-12 py-6 text-3xl font-black text-ground hover:bg-gold-bright"
           onClick={async (e) => {
             e.currentTarget.blur();
             await unlockAudio();
@@ -278,7 +326,7 @@ export default function HostView() {
         >
           操作をはじめる
         </button>
-        <p className="max-w-md text-center text-neutral-400">
+        <p className="max-w-md text-center text-ink-3">
           クリックすると早押しのビープ音が鳴らせるようになります。
           投影用の画面は、この先の「投影画面を開く」から開けます。
         </p>
@@ -287,11 +335,14 @@ export default function HostView() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto bg-neutral-950 p-4">
+    <div className="flex h-full flex-col gap-3 overflow-y-auto bg-ground p-4">
       {/* ヘッダー */}
       <div className="flex items-center justify-between text-sm">
-        <span className={connected ? "text-green-500" : "text-yellow-500"}>
-          {connected ? "● 接続中" : "○ 再接続中…"}
+        <span
+          className={`inline-flex items-center gap-1.5 ${connected ? "text-ok" : "text-gold"}`}
+        >
+          {Ico.dot(connected)}
+          {connected ? "接続中" : "再接続中…"}
         </span>
         <div className="flex items-center gap-3">
           {/*
@@ -305,11 +356,11 @@ export default function HostView() {
               window.open(screenPath(hostKey), SCREEN_WIN);
               window.focus(); // 操作は管理画面に戻す
             }}
-            className="rounded-lg border border-neutral-600 px-3 py-1 text-neutral-300 hover:bg-neutral-800"
+            className="rounded-r1 border border-chip px-3 py-1 text-ink-2 hover:bg-sink"
           >
             投影画面を開く
           </button>
-          <span className="text-neutral-500">再生モード</span>
+          <span className="text-ink-3">再生モード</span>
           <ModeToggle mode={mode} onChange={stopPlayback} />
         </div>
       </div>
@@ -317,11 +368,11 @@ export default function HostView() {
       <RoomBar roomCode={state.roomCode} hostKey={hostKey} />
 
       {canRestore && saved && (
-        <div className="rounded-2xl border-2 border-sky-500 bg-sky-950/60 p-4 text-sky-100">
+        <div className="rounded-r2 border-2 border-gold bg-panel p-4 text-ink">
           <div className="font-bold">
             前回この端末で使った曲リストがあります（{saved.length}曲）
           </div>
-          <div className="mt-1 text-sm text-sky-200">
+          <div className="mt-1 text-sm text-ink-2">
             サーバーを再起動すると曲は初期値に戻ります。今のリスト（
             {songs.length}曲）と違うので、必要なら戻せます。
           </div>
@@ -332,7 +383,7 @@ export default function HostView() {
                 socket.emit("host:setSongs", saved);
                 setDismissRestore(true);
               }}
-              className="rounded-lg bg-sky-600 px-4 py-2 font-bold text-neutral-950 hover:bg-sky-500"
+              className="rounded-r1 bg-gold px-4 py-2 font-bold text-ground hover:bg-gold-bright"
             >
               前回のリストに戻す
             </button>
@@ -341,7 +392,7 @@ export default function HostView() {
                 e.currentTarget.blur();
                 setDismissRestore(true);
               }}
-              className="rounded-lg border border-sky-700 px-4 py-2 text-sky-200 hover:bg-sky-900"
+              className="rounded-r1 border border-gold px-4 py-2 text-ink-2 hover:bg-panel"
             >
               今のままでよい
             </button>
@@ -349,527 +400,541 @@ export default function HostView() {
         </div>
       )}
 
-      {/* 早押し状況 */}
-      <div
-        className={`rounded-2xl px-5 py-6 text-center ${
-          showWrong ? "bg-red-800" : buzzed ? "bg-emerald-700" : "bg-neutral-900"
-        }`}
-      >
-        {showWrong ? (
-          <>
-            <div className="text-4xl font-black">不正解 — {wrongName} さん</div>
-            <div className="mt-1 text-2xl text-red-100">
-              {countdown > 0 ? `受付再開まで ${countdown}` : "受付を再開しました"}
-            </div>
-          </>
-        ) : buzzed ? (
-          <>
-            <div className="text-lg text-emerald-100">回答者</div>
-            <div className="break-all text-5xl font-black leading-tight">
-              {buzzed.name}
-            </div>
-          </>
-        ) : (
-          <div className="text-3xl font-bold text-neutral-500">受付中</div>
-        )}
-      </div>
-
-      {/* 現在の問題（答えが見える。投影には出ない） */}
-      <div className="rounded-2xl bg-neutral-900 p-5">
-        <div className="flex items-center justify-between">
-          <span className="text-lg text-neutral-400">
-            第 {index + 1} 問 / 全 {songs.length || "-"} 問
-          </span>
-          {suspense && (
-            <span className="rounded bg-neutral-200 px-2 py-0.5 text-sm font-bold text-neutral-900">
-              正解は… 溜め中
-            </span>
-          )}
-          {revealed && (
-            <span className="rounded bg-amber-400 px-2 py-0.5 text-sm font-bold text-neutral-900">
-              答え表示中
-            </span>
-          )}
-        </div>
-        <div className="mt-2 break-all text-3xl font-black leading-tight">
-          {song?.title ?? "（曲データなし）"}
-        </div>
-        <div className="text-xl text-neutral-300">{song?.artist ?? ""}</div>
-        {song?.owner && (
-          <div className="mt-1 text-lg text-amber-300">
-            {song.owner} さんの推し曲
-          </div>
-        )}
-        {mode === "manual" && song && song.videoId && (
-          // 手動モード専用。外部の YouTube タブを t= 付きで開く。
-          // YouTubeモードでは画面内のプレイヤーが鳴らすので出さない。
-          // 両方出すと、どちらが鳴るのか分からず二重再生の元になる。
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <YtBtn
-              onClick={() => playAt(song.videoId, song.startSec)}
-              label={`▶ イントロ (${song.startSec}秒〜)`}
-            />
-            <YtBtn
-              onClick={() =>
-                playAt(song.videoId, song.chorusSec ?? song.startSec)
-              }
-              label={`♪ サビ (${song.chorusSec ?? song.startSec}秒〜)`}
-              accent
-            />
-            <span className="text-xs text-neutral-500">
-              {playerOpen ? "再生タブと接続中" : "初回のみタブが切り替わります"}
-            </span>
-          </div>
-        )}
-        {mode === "manual" && song && !song.videoId && (
-          <div className="mt-3 text-sm text-neutral-600">
-            動画IDが未設定です（手元で曲を探して再生してください）
-          </div>
-        )}
-      </div>
-
       {/*
-        プレイヤー。YouTubeモードのときだけ作る。
-        映像は隠さない（埋め込みプレーヤーは可視であることが求められる）。
-        現在の曲だけを枠内に置き、他は枠外へ逃がす。
+        1画面で回すために2列にする。左が「押す」、右が「見て選ぶ」。
+        縦1列のままだと、本番中に操作を探してスクロールすることになる。
+        xl 未満（ノートPCを半分に割ったときなど）は従来どおり縦1列へ戻す。
       */}
-      {mode === "youtube" && (
-        <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
-          {songs.map((_, i) => (
-            <div
-              key={i}
-              className="absolute h-full w-full"
-              style={
-                i === index ? { left: 0, top: 0 } : { left: "-200vw", top: 0 }
-              }
-            >
-              <div className="h-full w-full" ref={yt.registerRef(i)} />
-            </div>
-          ))}
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+        {/* 左列: 進行を押す操作。上から順に手が下りるよう並べる */}
+        <div className="flex flex-col gap-3 xl:w-[44rem] xl:shrink-0">
+          {/* 早押し状況 */}
+          <div
+            className={`rounded-r2 px-5 py-6 text-center ${
+              showWrong ? "bg-miss" : buzzed ? "bg-win" : "bg-panel"
+            }`}
+          >
+            {showWrong ? (
+              <>
+                <div className="text-4xl font-black">不正解 — {wrongName} さん</div>
+                <div className="mt-1 text-2xl text-miss-ink">
+                  {countdown > 0 ? `受付再開まで ${countdown}` : "受付を再開しました"}
+                </div>
+              </>
+            ) : buzzed ? (
+              <>
+                <div className="text-lg text-gold-bright">回答者</div>
+                <div className="break-all text-5xl font-black leading-tight">
+                  {buzzed.name}
+                </div>
+              </>
+            ) : (
+              <div className="text-3xl font-bold text-ink-3">受付中</div>
+            )}
+          </div>
 
-          {!yt.ready && (
-            <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/90 text-neutral-300">
-              動画を準備中… {yt.readyCount} / {yt.total}
+          {/* 現在の問題（答えが見える。投影には出ない） */}
+          <div className="rounded-r2 bg-panel p-5">
+            <div className="flex items-center justify-between">
+              <span className="text-lg text-ink-3">
+                第 {index + 1} 問 / 全 {songs.length || "-"} 問
+              </span>
+              {suspense && (
+                <span className="rounded bg-ink px-2 py-0.5 text-sm font-bold text-ground">
+                  正解は… 溜め中
+                </span>
+              )}
+              {revealed && (
+                <span className="rounded bg-gold-bright px-2 py-0.5 text-sm font-bold text-ground">
+                  答え表示中
+                </span>
+              )}
+            </div>
+            <div className="mt-2 break-all text-3xl font-black leading-tight">
+              {song?.title ?? "（曲データなし）"}
+            </div>
+            <div className="text-xl text-ink-2">{song?.artist ?? ""}</div>
+            {song?.owner && (
+              <div className="mt-1 text-lg text-gold-bright">
+                {song.owner} さんの推し曲
+              </div>
+            )}
+            {mode === "manual" && song && song.videoId && (
+              // 手動モード専用。外部の YouTube タブを t= 付きで開く。
+              // YouTubeモードでは画面内のプレイヤーが鳴らすので出さない。
+              // 両方出すと、どちらが鳴るのか分からず二重再生の元になる。
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <YtBtn
+                  onClick={() => playAt(song.videoId, song.startSec)}
+                  label={<>{Ico.play()}イントロ ({song.startSec}秒〜)</>}
+                />
+                <YtBtn
+                  onClick={() =>
+                    playAt(song.videoId, song.chorusSec ?? song.startSec)
+                  }
+                  label={<>{Ico.note()}サビ ({song.chorusSec ?? song.startSec}秒〜)</>}
+                  accent
+                />
+                <span className="text-xs text-ink-3">
+                  {playerOpen ? "再生タブと接続中" : "初回のみタブが切り替わります"}
+                </span>
+              </div>
+            )}
+            {mode === "manual" && song && !song.videoId && (
+              <div className="mt-3 text-sm text-chip-ink">
+                動画IDが未設定です（手元で曲を探して再生してください）
+              </div>
+            )}
+          </div>
+
+          {/*
+            プレイヤー。YouTubeモードのときだけ作る。
+            映像は隠さない（埋め込みプレーヤーは可視であることが求められる）。
+            現在の曲だけを枠内に置き、他は枠外へ逃がす。
+          */}
+          {mode === "youtube" && (
+            <div className="relative aspect-video w-full overflow-hidden rounded-r2 bg-black">
+              {songs.map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute h-full w-full"
+                  style={
+                    i === index ? { left: 0, top: 0 } : { left: "-200vw", top: 0 }
+                  }
+                >
+                  <div className="h-full w-full" ref={yt.registerRef(i)} />
+                </div>
+              ))}
+
+              {!yt.ready && (
+                <div className="absolute inset-0 flex items-center justify-center bg-ground/90 text-ink-2">
+                  動画を準備中… {yt.readyCount} / {yt.total}
+                </div>
+              )}
+
+              {ytError !== undefined && (
+                <div className="absolute inset-x-4 bottom-4 rounded-r2 border-2 border-miss-border bg-miss-deep/95 px-4 py-3 text-center text-miss-ink">
+                  この曲は再生できません（{ytErrorMessage(ytError)}）
+                  <div className="mt-1 text-sm text-miss-ink2">
+                    手動モードへ切り替えてください
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
-          {ytError !== undefined && (
-            <div className="absolute inset-x-4 bottom-4 rounded-xl border-2 border-red-500 bg-red-950/95 px-4 py-3 text-center text-red-200">
-              この曲は再生できません（{ytErrorMessage(ytError)}）
-              <div className="mt-1 text-sm text-red-300">
-                手動モードへ切り替えてください
+          {/*
+            曲ごとの音量。YouTube のラウドネス正規化は大きい音を下げるだけで
+            小さい音を持ち上げないため、アートトラック(〇〇 - Topic)とMVを混ぜると
+            音量差が残る。鳴らしながら合わせて、離した時点で songs へ保存する。
+          */}
+          {mode === "youtube" && song && (
+            <div className="rounded-r2 bg-panel px-4 py-3">
+              <label className="flex items-center gap-3">
+                <span className="shrink-0 text-sm text-ink-3">この曲</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={shownVolume}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setVolumeDraft(v);
+                    yt.setVolume(index, v); // 鳴っていれば即座に反映される
+                  }}
+                  onPointerUp={() => saveVolume()}
+                  onKeyUp={() => saveVolume()}
+                  onBlur={() => saveVolume()}
+                  className="h-2 w-full cursor-pointer"
+                />
+                <span className="w-10 shrink-0 text-right tabular-nums text-ink-2">
+                  {shownVolume}
+                </span>
+              </label>
+              <div className="mt-1 flex items-center justify-between text-xs">
+                <span className="text-ink-3">
+                  {hasOwnVolume
+                    ? "この曲だけの設定"
+                    : `全体音量に従っています（${masterVolume}）`}
+                </span>
+                {hasOwnVolume && (
+                  <button
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      clearOwnVolume();
+                    }}
+                    className="rounded border border-chip px-2 py-0.5 text-ink-3 hover:bg-sink"
+                  >
+                    全体に戻す
+                  </button>
+                )}
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/*
-        曲ごとの音量。YouTube のラウドネス正規化は大きい音を下げるだけで
-        小さい音を持ち上げないため、アートトラック(〇〇 - Topic)とMVを混ぜると
-        音量差が残る。鳴らしながら合わせて、離した時点で songs へ保存する。
-      */}
-      {mode === "youtube" && song && (
-        <div className="rounded-2xl bg-neutral-900 px-4 py-3">
-          <label className="flex items-center gap-3">
-            <span className="shrink-0 text-sm text-neutral-400">この曲</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              value={shownVolume}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setVolumeDraft(v);
-                yt.setVolume(index, v); // 鳴っていれば即座に反映される
+          {/* 操作ボタン */}
+          <div className="grid grid-cols-2 gap-3">
+            {mode === "youtube" ? (
+              <Btn
+                tone={playing ? "playing" : "play"}
+                onClick={() => socket.emit(playing ? "host:pause" : "host:play")}
+                className="col-span-2"
+                // 未準備のまま押すと「再生中なのに音が出ない」状態になるので止める。
+                // 曲が0件だと ready は真になってしまうので、そこも弾く。
+                disabled={!yt.ready || songs.length === 0}
+              >
+                {!yt.ready
+                  ? `動画を準備中… ${yt.readyCount}/${yt.total}`
+                  : revealed
+                    ? // 答えを出した後に鳴っているのはサビ。文言を実態に合わせる
+                      playing
+                      ? <>{Ico.pause()}サビを止める</>
+                      : <>{Ico.play()}サビを再生</>
+                    : playing
+                      ? <>{Ico.pause()}一時停止</>
+                      : <>{Ico.play()}イントロ再生</>}
+              </Btn>
+            ) : (
+              <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-r2 border border-dashed border-chip px-4 py-3 text-ink-2">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5"
+                  checked={autoChorus}
+                  onChange={(e) => setAutoChorus(e.target.checked)}
+                />
+                <span className="flex-1">
+                  正解時にサビを別タブで自動再生する
+                  <span className="block text-xs text-ink-3">
+                    同じタブを使い回すので、以降タブは切り替わりません
+                  </span>
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.blur();
+                    // 開演前に1回押しておけば、本番中にタブが切り替わらない
+                    playerWin.current = window.open("about:blank", YT_TAB);
+                    setPlayerOpen(!!playerWin.current);
+                    window.focus();
+                  }}
+                  className="rounded-r1 border border-chip px-3 py-2 text-sm text-ink-2 hover:bg-sink"
+                >
+                  {playerOpen ? <>{Ico.check()}再生タブ</> : "再生タブを用意"}
+                </button>
+              </label>
+            )}
+
+            <Btn
+              tone="primary"
+              onClick={() => {
+                socket.emit("host:reveal");
+                if (autoChorus && mode === "manual" && song?.videoId) {
+                  const sec = song.chorusSec ?? song.startSec;
+                  const w = playerWin.current;
+                  const delayMs = Math.round(chorusDelay * 1000);
+                  if (w && !w.closed && delayMs > 0) {
+                    // タブが既にあれば、指定した秒数だけ待ってから鳴らす。
+                    // 問題を移ったときに取り消せるよう ref に持たせる。
+                    chorusTimer.current = setTimeout(() => {
+                      chorusTimer.current = null;
+                      playAt(song.videoId, sec);
+                    }, delayMs);
+                  } else {
+                    // タブが無いときはクリック起点でないと開けないので、すぐ開く
+                    playAt(song.videoId, sec);
+                  }
+                }
               }}
-              onPointerUp={() => saveVolume()}
-              onKeyUp={() => saveVolume()}
-              onBlur={() => saveVolume()}
-              className="h-2 w-full cursor-pointer"
-            />
-            <span className="w-10 shrink-0 text-right tabular-nums text-neutral-300">
-              {shownVolume}
-            </span>
-          </label>
-          <div className="mt-1 flex items-center justify-between text-xs">
-            <span className="text-neutral-500">
-              {hasOwnVolume
-                ? "この曲だけの設定"
-                : `全体音量に従っています（${masterVolume}）`}
-            </span>
-            {hasOwnVolume && (
+              disabled={revealed || suspense}
+            >
+              {suspense ? "正解は…" : <>{Ico.circle()}正解・答えを出す</>}
+            </Btn>
+            <Btn
+              tone="danger"
+              onClick={() => socket.emit("host:wrong")}
+              disabled={!buzzed}
+            >
+              {Ico.cross()}お手つき
+            </Btn>
+
+            <Btn
+              tone="ghost"
+              onClick={() => socket.emit("host:reset")}
+              disabled={!buzzed}
+            >
+              押し直し
+            </Btn>
+            <Btn
+              tone="ghost"
+              onClick={() => {
+                // 問題番号が変わらないので、問題を移ったときの処理が走らない。
+                // 「やり直す」なら曲も頭に戻っていないとおかしいので、ここで明示的に行う。
+                stopPlayback(); // 手動モード: 再生タブを黙らせる
+                yt.seekToStart(index); // YouTubeモード: イントロの頭で止め直す
+                socket.emit("host:restartRound");
+              }}
+            >
+              この問題をやり直す
+            </Btn>
+
+            <Btn
+              tone="ghost"
+              onClick={() => socket.emit("host:setSong", index - 1)}
+              disabled={index <= 0}
+            >
+              ‹ 前の問題
+            </Btn>
+            <Btn
+              tone="play"
+              onClick={() => socket.emit("host:setSong", index + 1)}
+              disabled={index >= last}
+            >
+              次の問題 ›
+            </Btn>
+          </div>
+
+          {/* 演出の調整。当日その場で耳と目を合わせられるようにする */}
+          <div className="rounded-r2 bg-panel p-4">
+            <div className="pb-3 text-ink-3">演出の調整</div>
+
+            {/*
+              全体音量。曲ごとに設定していない曲はすべてこの値で鳴る。
+              まずここで会場に合わせ、目立つ曲だけ上の「この曲」で直す。
+            */}
+            {mode === "youtube" && (
+              <label className="mb-4 flex items-center gap-3">
+                <span className="shrink-0 text-sm text-ink-3">全体音量</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={masterVolume}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    socket.emit("host:setMasterVolume", v);
+                    // 個別設定の無い曲は即座に反映する
+                    if (!hasOwnVolume) yt.setVolume(index, v);
+                  }}
+                  className="h-2 w-full cursor-pointer"
+                />
+                <span className="w-10 shrink-0 text-right tabular-nums text-ink-2">
+                  {masterVolume}
+                </span>
+              </label>
+            )}
+
+            {mode === "youtube" && (
+              <label className="mb-4 flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-5 w-5"
+                  checked={runUp}
+                  onChange={(e) => socket.emit("host:setRunUp", e.target.checked)}
+                />
+                <span className="flex-1 text-ink-2">
+                  「正解は…」の溜めから助走を鳴らす
+                  <span className="block text-xs text-ink-3">
+                    溜めの長さぶんサビの手前から、音量を上げながら再生します。答えが出る
+                    瞬間にサビの頭が来ます。切ると溜めは無音になり、答えが出てから
+                    サビへ飛びます。
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {/*
+              早押しの音の確認。鳴らすのは投影画面だが、参加者に押してもらわずに
+              音が出るか確かめられるよう、ここから試聴できるようにしておく。
+            */}
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <span className="text-sm text-ink-3">早押しの音</span>
               <button
                 onClick={(e) => {
                   e.currentTarget.blur();
-                  clearOwnVolume();
+                  playBuzz();
                 }}
-                className="rounded border border-neutral-700 px-2 py-0.5 text-neutral-400 hover:bg-neutral-800"
+                className="rounded-r1 border border-chip px-3 py-2 text-sm text-ink-2 hover:bg-sink"
               >
-                全体に戻す
+                試聴
               </button>
+              <span className="text-xs text-ink-3">
+                本番は投影画面から鳴ります
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2">
+                <span className="text-sm text-ink-3">「正解は…」の長さ</span>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="10"
+                  value={state.suspenseMs / 1000}
+                  onChange={(e) =>
+                    socket.emit("host:setSuspense", Number(e.target.value) * 1000)
+                  }
+                  className="w-20 rounded-r1 bg-sink px-3 py-2 text-center text-ink outline-none focus:ring-2 focus:ring-gold"
+                />
+                <span className="text-sm text-ink-3">秒</span>
+              </label>
+
+              {mode === "manual" && (
+                <label className="flex items-center gap-2">
+                  <span className="text-sm text-ink-3">サビを鳴らすまで</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="10"
+                    value={chorusDelay}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(10, Number(e.target.value)));
+                      setChorusDelay(v);
+                      localStorage.setItem(CHORUS_DELAY_KEY, String(v));
+                    }}
+                    className="w-20 rounded-r1 bg-sink px-3 py-2 text-center text-ink outline-none focus:ring-2 focus:ring-gold"
+                  />
+                  <span className="text-sm text-ink-3">秒</span>
+                </label>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-chip-ink">
+              どちらも「正解」を押した時点からの秒数です。YouTube の読み込みぶん音が遅れるので、
+              サビは投影より早めに投げると揃います。
+            </p>
+          </div>
+
+        </div>
+
+        {/* 右列: 見て選ぶもの。進行中はあまり触らない */}
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          {/* 参加者 */}
+          <div className="rounded-r2 bg-panel p-4">
+            <div className="flex items-center justify-between pb-1">
+              <span className="text-ink-3">参加者 {state.players.length}人</span>
+              <button
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  // 取り返しがつかない操作なので必ず確認する
+                  const ok = window.confirm(
+                    `参加者 ${state.players.length}人 をすべて消します。\n` +
+                      `お手つきの記録も消えます。\n\n` +
+                      `いま繋がっている人は自動で入り直すので、\n` +
+                      `もう居ない人だけが消えます。\n\n実行しますか？`,
+                  );
+                  if (ok) socket.emit("host:clearPlayers");
+                }}
+                disabled={state.players.length === 0}
+                className="rounded-r1 border border-miss-border px-3 py-1 text-sm text-miss-ink2 hover:bg-miss-deep disabled:opacity-30"
+              >
+                全員クリア
+              </button>
+            </div>
+            <div className="pb-2 text-xs text-chip-ink">
+              名前をクリックするとお手つきを付け外しできます（別ブラウザで参加し直した人への対処用）
+            </div>
+            <ul className="flex flex-wrap gap-2">
+              {state.players.map((p) => {
+                const locked =
+                    state.lockedIds.includes(p.id) ||
+                    state.lockedNames.includes(p.name);
+                return (
+                  <li key={p.id}>
+                    <button
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        socket.emit("host:toggleLock", p.id);
+                      }}
+                      title={locked ? "お手つきを解除する" : "お手つきにする" }
+                      className={`rounded-r1 px-2.5 py-1 ${
+                        locked
+                          ? "bg-ground text-chip-ink line-through"
+                          : "bg-sink text-ink hover:bg-rule"
+                      }`}
+                    >
+                      {p.name}
+                      {locked && <span className="ml-1 text-xs no-underline">お手つき</span>}
+                    </button>
+                  </li>
+                );
+              })}
+              {state.players.length === 0 && (
+                <li className="text-chip-ink">まだ誰も参加していません</li>
+              )}
+            </ul>
+          </div>
+
+          {/* 曲の一覧。飛びたい問題を直接選べる */}
+          <div className="rounded-r2 bg-panel p-4">
+            <div className="flex items-center justify-between pb-2">
+              <span className="text-ink-3">問題一覧</span>
+              {draft === null ? (
+                <button
+                  className="inline-flex items-center gap-1.5 rounded-full border border-chip px-3.5 py-1 text-sm text-ink-2 hover:bg-sink"
+                  onClick={(e) => {
+                    e.currentTarget.blur();
+                    setDraft(songs.map((s) => ({ ...s })));
+                  }}
+                >
+                  {Ico.pencil()}曲を編集
+                </button>
+              ) : (
+                <span className="text-sm text-gold">編集中（未反映）</span>
+              )}
+            </div>
+
+            {draft === null ? (
+              <ul className="flex flex-col gap-1">
+                {songs.map((s, i) => (
+                  <li key={i}>
+                    <button
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        socket.emit("host:setSong", i);
+                      }}
+                      className={`w-full rounded-r1 px-3 py-2 text-left ${
+                        i === index
+                          ? "bg-panel text-ink"
+                          : "text-ink-2 hover:bg-sink"
+                      }`}
+                    >
+                      <div className="truncate">
+                        {i + 1}. {s.title}
+                      </div>
+                      <div className="truncate text-sm text-ink-3">
+                        {s.artist}
+                        {s.owner ? ` — ${s.owner} さんの推し曲` : ""}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+                {songs.length === 0 && (
+                  <li className="text-chip-ink">
+                    曲がありません。「曲を編集」から追加してください
+                  </li>
+                )}
+              </ul>
+            ) : (
+              <SongEditor
+                draft={draft}
+                // 更新関数を受け取れる形にする。曲名の取得は非同期なので、
+                // 呼び出し時点の draft を掴んだまま書き戻すと、その間の編集が消える。
+                setDraft={(next) =>
+                  setDraft((prev) => (prev === null ? prev : next(prev)))
+                }
+                onApply={() => {
+                  socket.emit("host:setSongs", draft);
+                  saveSongs(draft); // サーバーが再起動しても取り戻せるようにする
+                  setDraft(null);
+                }}
+                onCancel={() => setDraft(null)}
+              />
             )}
           </div>
         </div>
-      )}
-
-      {/* 操作ボタン */}
-      <div className="grid grid-cols-2 gap-3">
-        {mode === "youtube" ? (
-          <Btn
-            tone={playing ? "amber" : "blue"}
-            onClick={() => socket.emit(playing ? "host:pause" : "host:play")}
-            className="col-span-2"
-            // 未準備のまま押すと「再生中なのに音が出ない」状態になるので止める。
-            // 曲が0件だと ready は真になってしまうので、そこも弾く。
-            disabled={!yt.ready || songs.length === 0}
-          >
-            {!yt.ready
-              ? `動画を準備中… ${yt.readyCount}/${yt.total}`
-              : revealed
-                ? // 答えを出した後に鳴っているのはサビ。文言を実態に合わせる
-                  playing
-                  ? "⏸ サビを止める"
-                  : "▶ サビを再生"
-                : playing
-                  ? "⏸ 一時停止"
-                  : "▶ イントロ再生"}
-          </Btn>
-        ) : (
-          <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-neutral-700 px-4 py-3 text-neutral-300">
-            <input
-              type="checkbox"
-              className="h-5 w-5"
-              checked={autoChorus}
-              onChange={(e) => setAutoChorus(e.target.checked)}
-            />
-            <span className="flex-1">
-              正解時にサビを別タブで自動再生する
-              <span className="block text-xs text-neutral-500">
-                同じタブを使い回すので、以降タブは切り替わりません
-              </span>
-            </span>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.currentTarget.blur();
-                // 開演前に1回押しておけば、本番中にタブが切り替わらない
-                playerWin.current = window.open("about:blank", YT_TAB);
-                setPlayerOpen(!!playerWin.current);
-                window.focus();
-              }}
-              className="rounded-lg border border-neutral-600 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
-            >
-              {playerOpen ? "再生タブ ✓" : "再生タブを用意"}
-            </button>
-          </label>
-        )}
-
-        <Btn
-          tone="green"
-          onClick={() => {
-            socket.emit("host:reveal");
-            if (autoChorus && mode === "manual" && song?.videoId) {
-              const sec = song.chorusSec ?? song.startSec;
-              const w = playerWin.current;
-              const delayMs = Math.round(chorusDelay * 1000);
-              if (w && !w.closed && delayMs > 0) {
-                // タブが既にあれば、指定した秒数だけ待ってから鳴らす。
-                // 問題を移ったときに取り消せるよう ref に持たせる。
-                chorusTimer.current = setTimeout(() => {
-                  chorusTimer.current = null;
-                  playAt(song.videoId, sec);
-                }, delayMs);
-              } else {
-                // タブが無いときはクリック起点でないと開けないので、すぐ開く
-                playAt(song.videoId, sec);
-              }
-            }
-          }}
-          disabled={revealed || suspense}
-        >
-          {suspense ? "正解は…" : "○ 正解・答えを出す"}
-        </Btn>
-        <Btn
-          tone="red"
-          onClick={() => socket.emit("host:wrong")}
-          disabled={!buzzed}
-        >
-          × お手つき
-        </Btn>
-
-        <Btn
-          tone="ghost"
-          onClick={() => socket.emit("host:reset")}
-          disabled={!buzzed}
-        >
-          押し直し
-        </Btn>
-        <Btn
-          tone="ghost"
-          onClick={() => {
-            // 問題番号が変わらないので、問題を移ったときの処理が走らない。
-            // 「やり直す」なら曲も頭に戻っていないとおかしいので、ここで明示的に行う。
-            stopPlayback(); // 手動モード: 再生タブを黙らせる
-            yt.seekToStart(index); // YouTubeモード: イントロの頭で止め直す
-            socket.emit("host:restartRound");
-          }}
-        >
-          この問題をやり直す
-        </Btn>
-
-        <Btn
-          tone="ghost"
-          onClick={() => socket.emit("host:setSong", index - 1)}
-          disabled={index <= 0}
-        >
-          ‹ 前の問題
-        </Btn>
-        <Btn
-          tone="blue"
-          onClick={() => socket.emit("host:setSong", index + 1)}
-          disabled={index >= last}
-        >
-          次の問題 ›
-        </Btn>
-      </div>
-
-      {/* 演出の調整。当日その場で耳と目を合わせられるようにする */}
-      <div className="rounded-2xl bg-neutral-900 p-4">
-        <div className="pb-3 text-neutral-400">演出の調整</div>
-
-        {/*
-          全体音量。曲ごとに設定していない曲はすべてこの値で鳴る。
-          まずここで会場に合わせ、目立つ曲だけ上の「この曲」で直す。
-        */}
-        {mode === "youtube" && (
-          <label className="mb-4 flex items-center gap-3">
-            <span className="shrink-0 text-sm text-neutral-400">全体音量</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              value={masterVolume}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                socket.emit("host:setMasterVolume", v);
-                // 個別設定の無い曲は即座に反映する
-                if (!hasOwnVolume) yt.setVolume(index, v);
-              }}
-              className="h-2 w-full cursor-pointer"
-            />
-            <span className="w-10 shrink-0 text-right tabular-nums text-neutral-300">
-              {masterVolume}
-            </span>
-          </label>
-        )}
-
-        {mode === "youtube" && (
-          <label className="mb-4 flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              className="mt-1 h-5 w-5"
-              checked={runUp}
-              onChange={(e) => socket.emit("host:setRunUp", e.target.checked)}
-            />
-            <span className="flex-1 text-neutral-300">
-              「正解は…」の溜めから助走を鳴らす
-              <span className="block text-xs text-neutral-500">
-                溜めの長さぶんサビの手前から、音量を上げながら再生します。答えが出る
-                瞬間にサビの頭が来ます。切ると溜めは無音になり、答えが出てから
-                サビへ飛びます。
-              </span>
-            </span>
-          </label>
-        )}
-
-        {/*
-          早押しの音の確認。鳴らすのは投影画面だが、参加者に押してもらわずに
-          音が出るか確かめられるよう、ここから試聴できるようにしておく。
-        */}
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <span className="text-sm text-neutral-400">早押しの音</span>
-          <button
-            onClick={(e) => {
-              e.currentTarget.blur();
-              playBuzz();
-            }}
-            className="rounded-lg border border-neutral-600 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
-          >
-            試聴
-          </button>
-          <span className="text-xs text-neutral-500">
-            本番は投影画面から鳴ります
-          </span>
-        </div>
-
-        <div className="flex flex-wrap gap-4">
-          <label className="flex items-center gap-2">
-            <span className="text-sm text-neutral-400">「正解は…」の長さ</span>
-            <input
-              type="number"
-              step="0.5"
-              min="0"
-              max="10"
-              value={state.suspenseMs / 1000}
-              onChange={(e) =>
-                socket.emit("host:setSuspense", Number(e.target.value) * 1000)
-              }
-              className="w-20 rounded-lg bg-neutral-800 px-3 py-2 text-center text-neutral-100 outline-none focus:ring-2 focus:ring-sky-600"
-            />
-            <span className="text-sm text-neutral-500">秒</span>
-          </label>
-
-          {mode === "manual" && (
-            <label className="flex items-center gap-2">
-              <span className="text-sm text-neutral-400">サビを鳴らすまで</span>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                max="10"
-                value={chorusDelay}
-                onChange={(e) => {
-                  const v = Math.max(0, Math.min(10, Number(e.target.value)));
-                  setChorusDelay(v);
-                  localStorage.setItem(CHORUS_DELAY_KEY, String(v));
-                }}
-                className="w-20 rounded-lg bg-neutral-800 px-3 py-2 text-center text-neutral-100 outline-none focus:ring-2 focus:ring-amber-600"
-              />
-              <span className="text-sm text-neutral-500">秒</span>
-            </label>
-          )}
-        </div>
-        <p className="mt-2 text-xs text-neutral-600">
-          どちらも「正解」を押した時点からの秒数です。YouTube の読み込みぶん音が遅れるので、
-          サビは投影より早めに投げると揃います。
-        </p>
-      </div>
-
-      {/* 参加者 */}
-      <div className="rounded-2xl bg-neutral-900 p-4">
-        <div className="flex items-center justify-between pb-1">
-          <span className="text-neutral-400">参加者 {state.players.length}人</span>
-          <button
-            onClick={(e) => {
-              e.currentTarget.blur();
-              // 取り返しがつかない操作なので必ず確認する
-              const ok = window.confirm(
-                `参加者 ${state.players.length}人 をすべて消します。\n` +
-                  `お手つきの記録も消えます。\n\n` +
-                  `いま繋がっている人は自動で入り直すので、\n` +
-                  `もう居ない人だけが消えます。\n\n実行しますか？`,
-              );
-              if (ok) socket.emit("host:clearPlayers");
-            }}
-            disabled={state.players.length === 0}
-            className="rounded-lg border border-red-800 px-3 py-1 text-sm text-red-300 hover:bg-red-950 disabled:opacity-30"
-          >
-            全員クリア
-          </button>
-        </div>
-        <div className="pb-2 text-xs text-neutral-600">
-          名前をクリックするとお手つきを付け外しできます（別ブラウザで参加し直した人への対処用）
-        </div>
-        <ul className="flex flex-wrap gap-2">
-          {state.players.map((p) => {
-            const locked =
-                state.lockedIds.includes(p.id) ||
-                state.lockedNames.includes(p.name);
-            return (
-              <li key={p.id}>
-                <button
-                  onClick={(e) => {
-                    e.currentTarget.blur();
-                    socket.emit("host:toggleLock", p.id);
-                  }}
-                  title={locked ? "お手つきを解除する" : "お手つきにする" }
-                  className={`rounded-lg px-2.5 py-1 ${
-                    locked
-                      ? "bg-neutral-950 text-neutral-600 line-through"
-                      : "bg-neutral-800 text-neutral-100 hover:bg-neutral-700"
-                  }`}
-                >
-                  {p.name}
-                  {locked && <span className="ml-1 text-xs no-underline">お手つき</span>}
-                </button>
-              </li>
-            );
-          })}
-          {state.players.length === 0 && (
-            <li className="text-neutral-600">まだ誰も参加していません</li>
-          )}
-        </ul>
-      </div>
-
-      {/* 曲の一覧。飛びたい問題を直接選べる */}
-      <div className="rounded-2xl bg-neutral-900 p-4">
-        <div className="flex items-center justify-between pb-2">
-          <span className="text-neutral-400">問題一覧</span>
-          {draft === null ? (
-            <button
-              className="rounded-lg border border-neutral-700 px-3 py-1 text-sm text-neutral-300 hover:bg-neutral-800"
-              onClick={(e) => {
-                e.currentTarget.blur();
-                setDraft(songs.map((s) => ({ ...s })));
-              }}
-            >
-              ✎ 曲を編集
-            </button>
-          ) : (
-            <span className="text-sm text-amber-400">編集中（未反映）</span>
-          )}
-        </div>
-
-        {draft === null ? (
-          <ul className="flex flex-col gap-1">
-            {songs.map((s, i) => (
-              <li key={i}>
-                <button
-                  onClick={(e) => {
-                    e.currentTarget.blur();
-                    socket.emit("host:setSong", i);
-                  }}
-                  className={`w-full rounded-lg px-3 py-2 text-left ${
-                    i === index
-                      ? "bg-sky-800 text-white"
-                      : "text-neutral-300 hover:bg-neutral-800"
-                  }`}
-                >
-                  <div className="truncate">
-                    {i + 1}. {s.title}
-                  </div>
-                  <div className="truncate text-sm text-neutral-400">
-                    {s.artist}
-                    {s.owner ? ` — ${s.owner} さんの推し曲` : ""}
-                  </div>
-                </button>
-              </li>
-            ))}
-            {songs.length === 0 && (
-              <li className="text-neutral-600">
-                曲がありません。「曲を編集」から追加してください
-              </li>
-            )}
-          </ul>
-        ) : (
-          <SongEditor
-            draft={draft}
-            // 更新関数を受け取れる形にする。曲名の取得は非同期なので、
-            // 呼び出し時点の draft を掴んだまま書き戻すと、その間の編集が消える。
-            setDraft={(next) =>
-              setDraft((prev) => (prev === null ? prev : next(prev)))
-            }
-            onApply={() => {
-              socket.emit("host:setSongs", draft);
-              saveSongs(draft); // サーバーが再起動しても取り戻せるようにする
-              setDraft(null);
-            }}
-            onCancel={() => setDraft(null)}
-          />
-        )}
       </div>
     </div>
   );
@@ -882,7 +947,7 @@ function YtBtn({
   accent,
 }: {
   onClick: () => void;
-  label: string;
+  label: React.ReactNode;
   accent?: boolean;
 }) {
   return (
@@ -891,10 +956,10 @@ function YtBtn({
         e.currentTarget.blur();
         onClick();
       }}
-      className={`rounded-lg px-3 py-2 text-base font-bold ${
+      className={`inline-flex items-center justify-center gap-1.5 rounded-r1 px-3 py-2 text-base font-bold ${
         accent
-          ? "bg-amber-500 text-neutral-900 hover:bg-amber-400"
-          : "bg-sky-700 text-white hover:bg-sky-600"
+          ? "bg-gold text-ground hover:bg-gold-bright"
+          : "bg-sink text-ink hover:bg-gold"
       }`}
     >
       {label}
@@ -938,10 +1003,10 @@ function RoomBar({ roomCode, hostKey }: { roomCode: string; hostKey: string }) {
   if (!roomCode) return null;
 
   return (
-    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3">
+    <div className="rounded-r2 border border-rule bg-panel px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div>
-          <span className="pr-2 text-sm text-neutral-500">参加コード</span>
+          <span className="pr-2 text-sm text-ink-3">参加コード</span>
           <span className="text-2xl font-black tracking-[0.2em]">{roomCode}</span>
         </div>
         <button
@@ -949,7 +1014,7 @@ function RoomBar({ roomCode, hostKey }: { roomCode: string; hostKey: string }) {
             e.currentTarget.blur();
             void copy("join", joinUrl || window.location.origin);
           }}
-          className="rounded-lg border border-neutral-600 px-3 py-1 text-sm text-neutral-300 hover:bg-neutral-800"
+          className="inline-flex items-center gap-1.5 rounded-full border border-chip px-3.5 py-1 text-sm text-ink-2 hover:bg-sink"
         >
           {copied === "join" ? "コピーしました" : "参加URLをコピー"}
         </button>
@@ -958,7 +1023,7 @@ function RoomBar({ roomCode, hostKey }: { roomCode: string; hostKey: string }) {
             e.currentTarget.blur();
             setShowQr((v) => !v);
           }}
-          className="rounded-lg border border-neutral-600 px-3 py-1 text-sm text-neutral-300 hover:bg-neutral-800"
+          className="inline-flex items-center gap-1.5 rounded-full border border-chip px-3.5 py-1 text-sm text-ink-2 hover:bg-sink"
         >
           {showQr ? "QRを隠す" : "QRを出す"}
         </button>
@@ -968,16 +1033,16 @@ function RoomBar({ roomCode, hostKey }: { roomCode: string; hostKey: string }) {
             e.currentTarget.blur();
             void copy("host", hostUrl);
           }}
-          className="rounded-lg border border-amber-700 px-3 py-1 text-sm text-amber-200 hover:bg-amber-950"
+          className="rounded-r1 border border-gold px-3 py-1 text-sm text-gold-bright hover:bg-panel"
         >
           {copied === "host" ? "コピーしました" : "管理URLをコピー"}
         </button>
       </div>
-      <p className="pt-2 text-xs text-neutral-500">
+      <p className="pt-2 text-xs text-ink-3">
         参加者に配るのは
-        <span className="px-1 text-neutral-300">{joinUrl || "参加URL"}</span>
+        <span className="px-1 text-ink-2">{joinUrl || "参加URL"}</span>
         だけ。管理URLは答えが見えるので渡さないこと。
-        <strong className="pl-1 text-amber-300">
+        <strong className="pl-1 text-gold-bright">
           管理URLを控えておかないと、この部屋には戻れません。
         </strong>
       </p>
@@ -985,7 +1050,7 @@ function RoomBar({ roomCode, hostKey }: { roomCode: string; hostKey: string }) {
         <img
           src={`/qr.png?room=${encodeURIComponent(roomCode)}`}
           alt="参加用QR"
-          className="mt-3 w-48 rounded-xl bg-white p-2"
+          className="mt-3 w-48 rounded-r2 bg-ink p-2"
         />
       )}
     </div>
@@ -1000,7 +1065,7 @@ function ModeToggle({
   onChange: () => void;
 }) {
   return (
-    <div className="flex overflow-hidden rounded-lg border border-neutral-700">
+    <div className="flex overflow-hidden rounded-r1 border border-chip">
       {(["manual", "youtube"] as PlayMode[]).map((m) => (
         <button
           key={m}
@@ -1014,8 +1079,8 @@ function ModeToggle({
           }}
           className={`px-3 py-1 ${
             mode === m
-              ? "bg-neutral-200 text-neutral-900"
-              : "text-neutral-400 hover:bg-neutral-800"
+              ? "bg-gold font-bold text-ground"
+              : "text-ink-3 hover:bg-sink"
           }`}
         >
           {m === "manual" ? "手動" : "YouTube"}
@@ -1035,16 +1100,17 @@ function Btn({
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  tone?: "green" | "red" | "blue" | "amber" | "ghost";
+  tone?: "primary" | "danger" | "play" | "playing" | "ghost";
   className?: string;
 }) {
   const tones: Record<string, string> = {
-    green: "bg-emerald-600 hover:bg-emerald-500 text-white",
-    red: "bg-red-600 hover:bg-red-500 text-white",
-    blue: "bg-sky-700 hover:bg-sky-600 text-white",
-    amber: "bg-amber-600 hover:bg-amber-500 text-white",
-    ghost:
-      "bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700",
+    // 唯一の「進める」操作なので、ここだけ金で塗る
+    primary: "bg-gold hover:bg-gold-bright text-ground",
+    danger: "bg-miss-deep hover:bg-miss text-miss-ink border border-miss-border",
+    play: "bg-sink hover:bg-panel text-ink border border-chip",
+    // 鳴っている最中。塗りにすると「正解」と見分けがつかないので枠だけにする
+    playing: "border border-gold text-gold hover:bg-panel",
+    ghost: "bg-sink hover:bg-panel text-ink-2 border border-chip",
   };
   return (
     <button
@@ -1053,7 +1119,7 @@ function Btn({
         onClick();
       }}
       disabled={disabled}
-      className={`rounded-xl px-4 py-4 text-xl font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${tones[tone]} ${className}`}
+      className={`flex items-center justify-center gap-2 rounded-r2 px-4 py-4 text-xl font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${tones[tone]} ${className}`}
     >
       {children}
     </button>
@@ -1145,9 +1211,9 @@ function SongEditor({
   return (
     <div className="flex flex-col gap-3">
       {draft.map((s, i) => (
-        <div key={i} className="rounded-xl border border-neutral-700 p-3">
+        <div key={i} className="rounded-r2 border border-chip p-3">
           <div className="flex items-center gap-2 pb-2">
-            <span className="text-neutral-500">{i + 1}</span>
+            <span className="text-ink-3">{i + 1}</span>
             <div className="flex-1" />
             <IconBtn onClick={() => move(i, -1)} disabled={i === 0} label="↑" />
             <IconBtn
@@ -1186,11 +1252,11 @@ function SongEditor({
                 void fetchMeta(i, s.videoId, true);
               }}
               disabled={!s.videoId}
-              className="rounded-lg border border-neutral-600 px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800 disabled:border-neutral-800 disabled:text-neutral-600"
+              className="rounded-r1 border border-chip px-3 py-1.5 text-sm text-ink-2 hover:bg-sink disabled:border-rule disabled:text-chip-ink"
             >
               YouTubeから曲名を取得
             </button>
-            <span className="text-xs text-neutral-500">{meta[i] ?? ""}</span>
+            <span className="text-xs text-ink-3">{meta[i] ?? ""}</span>
           </div>
           <div className="flex gap-2">
             <Field
@@ -1214,7 +1280,7 @@ function SongEditor({
           e.currentTarget.blur();
           add();
         }}
-        className="rounded-xl border border-dashed border-neutral-600 py-3 text-neutral-300 hover:bg-neutral-800"
+        className="rounded-r2 border border-dashed border-chip py-3 text-ink-2 hover:bg-sink"
       >
         ＋ 曲を追加
       </button>
@@ -1225,7 +1291,7 @@ function SongEditor({
             e.currentTarget.blur();
             onApply();
           }}
-          className="flex-1 rounded-xl bg-emerald-600 py-3 text-lg font-bold hover:bg-emerald-500"
+          className="flex-1 rounded-r2 bg-gold py-3 text-lg font-bold text-ground hover:bg-gold-bright"
         >
           反映する
         </button>
@@ -1234,7 +1300,7 @@ function SongEditor({
             e.currentTarget.blur();
             onCancel();
           }}
-          className="rounded-xl border border-neutral-700 px-5 py-3 text-neutral-300 hover:bg-neutral-800"
+          className="rounded-r2 border border-chip px-5 py-3 text-ink-2 hover:bg-sink"
         >
           やめる
         </button>
@@ -1253,7 +1319,7 @@ function SongEditor({
             window.prompt("コピーして保存してください", json);
           }
         }}
-        className="rounded-xl border border-neutral-700 py-2 text-sm text-neutral-400 hover:bg-neutral-800"
+        className="rounded-r2 border border-chip py-2 text-sm text-ink-3 hover:bg-sink"
       >
         JSONとして書き出す
       </button>
@@ -1263,16 +1329,16 @@ function SongEditor({
         持ち込めない。サーバーは曲を保存しないので、ここが実質の持ち運び手段になる。
       */}
       {importOpen ? (
-        <div className="flex flex-col gap-2 rounded-xl border border-neutral-700 p-3">
+        <div className="flex flex-col gap-2 rounded-r2 border border-chip p-3">
           <textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
             placeholder='[{"videoId":"...","title":"...","artist":"...","owner":"","startSec":0,"chorusSec":43}]'
             rows={6}
-            className="w-full rounded-lg bg-neutral-800 p-2 font-mono text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-600"
+            className="w-full rounded-r1 bg-sink p-2 font-mono text-xs text-ink outline-none focus:ring-2 focus:ring-gold"
           />
           {importError && (
-            <div className="text-sm text-red-400">{importError}</div>
+            <div className="text-sm text-miss-ink2">{importError}</div>
           )}
           <div className="flex gap-2">
             <button
@@ -1288,7 +1354,7 @@ function SongEditor({
                 setImportText("");
                 setImportError("");
               }}
-              className="flex-1 rounded-lg bg-sky-600 py-2 font-bold text-neutral-950 hover:bg-sky-500"
+              className="flex-1 rounded-r1 bg-gold py-2 font-bold text-ground hover:bg-gold-bright"
             >
               読み込む（まだ反映されません）
             </button>
@@ -1298,7 +1364,7 @@ function SongEditor({
                 setImportOpen(false);
                 setImportError("");
               }}
-              className="rounded-lg border border-neutral-700 px-4 text-neutral-300 hover:bg-neutral-800"
+              className="rounded-r1 border border-chip px-4 text-ink-2 hover:bg-sink"
             >
               やめる
             </button>
@@ -1310,7 +1376,7 @@ function SongEditor({
             e.currentTarget.blur();
             setImportOpen(true);
           }}
-          className="rounded-xl border border-neutral-700 py-2 text-sm text-neutral-400 hover:bg-neutral-800"
+          className="rounded-r2 border border-chip py-2 text-sm text-ink-3 hover:bg-sink"
         >
           JSONから読み込む
         </button>
@@ -1461,9 +1527,9 @@ function Field({
 }) {
   return (
     <label className="mb-2 block">
-      <span className="text-xs text-neutral-500">{label}</span>
+      <span className="text-xs text-ink-3">{label}</span>
       <input
-        className="w-full rounded-lg bg-neutral-800 px-3 py-2 text-neutral-100 outline-none focus:ring-2 focus:ring-sky-600"
+        className="w-full rounded-r1 bg-sink px-3 py-2 text-ink outline-none focus:ring-2 focus:ring-gold"
         value={value}
         inputMode={numeric ? "numeric" : undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -1490,10 +1556,10 @@ function IconBtn({
         onClick();
       }}
       disabled={disabled}
-      className={`rounded-lg border px-3 py-1 text-sm disabled:opacity-30 ${
+      className={`rounded-r1 border px-3 py-1 text-sm disabled:opacity-30 ${
         danger
-          ? "border-red-800 text-red-300 hover:bg-red-950"
-          : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"
+          ? "border-miss-border text-miss-ink2 hover:bg-miss-deep"
+          : "border-chip text-ink-2 hover:bg-sink"
       }`}
     >
       {label}
