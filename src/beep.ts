@@ -76,15 +76,20 @@ export function beep(): void {
 
 // --- 音源ファイル ---
 //
-// 早押しの効果音は public/sfx/buzz.mp3 を使う。new Audio() ではなく
-// AudioContext に取り込んでおくのは、鳴らすまでの遅延を小さくするためと、
-// 早押し連打で音が詰まらないようにするため。
+// 効果音は public/sfx/ のファイルを使う。new Audio() ではなく AudioContext に
+// 取り込んでおくのは、鳴らすまでの遅延を小さくするためと、連打で音が詰まらない
+// ようにするため。
 //
-// 読み込みに失敗しても無音にはしない。上の beep() が代わりに鳴る。
+// 読み込みに失敗しても無音にはしない。合成音が代わりに鳴る。
 
-const BUZZ_URL = "/sfx/buzz.mp3";
+const SFX_URL = {
+  buzz: "/sfx/buzz.mp3", // 早押し
+  wrong: "/sfx/wrong.mp3", // お手つき（不正解）
+} as const;
 
-let buzzBuffer: AudioBuffer | null = null;
+type SfxName = keyof typeof SFX_URL;
+
+const buffers = new Map<SfxName, AudioBuffer>();
 
 /**
  * 音源を先読みしてデコードしておく。
@@ -93,35 +98,88 @@ let buzzBuffer: AudioBuffer | null = null;
  */
 export async function preloadSfx(): Promise<void> {
   const ctx = audioContext;
-  if (!ctx || buzzBuffer) return;
+  if (!ctx) return;
+
+  await Promise.all(
+    (Object.keys(SFX_URL) as SfxName[]).map(async (name) => {
+      if (buffers.has(name)) return;
+      try {
+        const res = await fetch(SFX_URL[name]);
+        if (!res.ok) return;
+        buffers.set(name, await ctx.decodeAudioData(await res.arrayBuffer()));
+      } catch {
+        // 取得・デコードに失敗した音は諦める。合成音へ落ちる。
+      }
+    }),
+  );
+}
+
+/** 音源を鳴らす。鳴らせたら true。無ければ false を返して呼び元が合成音へ落とす */
+function playFile(name: SfxName): boolean {
+  const ctx = audioContext;
+  if (!ctx || ctx.state !== "running") return false;
+
+  const buffer = buffers.get(name);
+  if (!buffer) return false;
 
   try {
-    const res = await fetch(BUZZ_URL);
-    if (!res.ok) return;
-    buzzBuffer = await ctx.decodeAudioData(await res.arrayBuffer());
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    src.start();
+    return true;
   } catch {
-    // 取得・デコードに失敗したら合成音へ落ちる
+    return false;
   }
 }
 
-/** 早押しの合図を鳴らす。音源が無ければ合成音へ落ちる */
+/** 早押しの合図。音源が無ければ合成音へ落ちる */
 export function playBuzz(): void {
+  if (audioContext?.state !== "running") return;
+  if (!playFile("buzz")) beep();
+}
+
+/** お手つきの合図。音源が無ければ合成音へ落ちる */
+export function playWrong(): void {
+  if (audioContext?.state !== "running") return;
+  if (!playFile("wrong")) wrongBeep();
+}
+
+/**
+ * お手つきの合成音。早押し音と取り違えないよう、性格を逆にしてある。
+ *   - 下向きの2音（A3 → E3）。早押しは上向きなので、聞けば区別できる
+ *   - のこぎり波で濁らせ、減衰を長めにして「ブブー」に寄せる
+ */
+function wrongBeep(): void {
   const ctx = audioContext;
   if (!ctx || ctx.state !== "running") return;
 
-  if (buzzBuffer) {
-    try {
-      const src = ctx.createBufferSource();
-      src.buffer = buzzBuffer;
-      src.connect(ctx.destination);
-      src.start();
-      return;
-    } catch {
-      // 再生できなければ合成音へ落ちる
-    }
-  }
+  try {
+    const now = ctx.currentTime;
+    const notes = [
+      { at: 0, freq: 220 }, // A3
+      { at: 0.16, freq: 164.8 }, // E3
+    ];
 
-  beep();
+    for (const note of notes) {
+      const t = now + note.at;
+
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.exponentialRampToValueAtTime(0.3, t + 0.012);
+      env.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      env.connect(ctx.destination);
+
+      const osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(note.freq, t);
+      osc.connect(env);
+      osc.start(t);
+      osc.stop(t + 0.32);
+    }
+  } catch {
+    // 鳴らせなくても進行は止めない。
+  }
 }
 
 /** 「準備完了」ボタンのクリックハンドラから呼ぶ。AudioContext.resume() する */

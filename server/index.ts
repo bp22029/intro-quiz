@@ -604,6 +604,10 @@ io.on("connection", (socket) => {
     R.lockedNames.add(R.buzzedBy.name);
     console.log(`[host:${R.code}] wrong: ${R.buzzedBy.name} をロック`);
 
+    // 音の合図。状態の変化から拾うと再接続や再描画で鳴り直してしまうので、
+    // 早押し(buzzed)と同じく、その瞬間に一度だけ配るイベントにする。
+    emitToRoom(R, "wrong", R.buzzedBy.name);
+
     // 「不正解」を出し、3秒のカウントダウン後に受付を再開する
     clearWrong(R);
     R.wrongName = R.buzzedBy.name;

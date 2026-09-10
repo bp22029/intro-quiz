@@ -20,12 +20,18 @@ function instrument(s) {
   s.lastState = null;
   s.frames = [];
   s.buzzCount = 0;
+  s.wrongCount = 0;
+  s.wrongNames = [];
   s.missing = false;
   s.on("state", (st) => {
     s.lastState = st;
     s.frames.push(JSON.stringify(st));
   });
   s.on("buzzed", () => s.buzzCount++);
+  s.on("wrong", (name) => {
+    s.wrongCount++;
+    s.wrongNames.push(name);
+  });
   s.on("room:missing", () => (s.missing = true));
   return s;
 }

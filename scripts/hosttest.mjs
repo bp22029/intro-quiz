@@ -104,6 +104,9 @@ check("管理画面も buzzed を受信（手元のビープ用）", host.buzzCo
 host.emit("host:wrong");
 await wait(D);
 check("お手つきで受付が再開する", screen.lastState.buzzedBy === null);
+// 音の合図。状態からではなくイベントで配る（再接続や再描画で鳴り直さないため）
+check("投影画面が wrong を受信（お手つき音用）", screen.wrongCount === 1);
+check("誰のお手つきかが一緒に届く", screen.wrongNames[0] === "あきら");
 check("お手つきで答え表示が消える", screen.lastState.round.revealed === false);
 check("押した本人だけロックされる", screen.lastState.lockedIds.length === 1);
 

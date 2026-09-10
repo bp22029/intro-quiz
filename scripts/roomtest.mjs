@@ -53,6 +53,7 @@ check(
 a1.emit("buzz");
 await wait(D);
 check("A で押すと A の buzzedBy が立つ", hostA.lastState.buzzedBy?.name === "えー1");
+check("A の buzzed は B へ漏れない", hostB.buzzCount === 0);
 check("B の buzzedBy は立たない", hostB.lastState.buzzedBy === null);
 check("B の参加者に buzzed が飛んでいない", b1.buzzCount === 0);
 check("A の参加者には buzzed が飛んでいる", a2.buzzCount === 1);

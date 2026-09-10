@@ -7,7 +7,7 @@
 // 限らないので、px で置くと解像度によって「後ろの席から読めない」が起きる。
 // 設計時の基準は 1280×720（1px = 0.078vw）。
 import { useEffect, useState } from "react";
-import { beep, playBuzz, preloadSfx, unlockAudio } from "./beep";
+import { beep, playBuzz, playWrong, preloadSfx, unlockAudio } from "./beep";
 import { RoomMissing, useRoomMissing } from "./RoomMissing";
 import { socket, syncState } from "./socket";
 import { fitVw } from "./textfit";
@@ -68,15 +68,19 @@ export default function ScreenView() {
     const onState = (s: State) => setState(s);
     // 早押しの合図。この画面だけが鳴らす（管理画面と二重に鳴らさないため）
     const onBuzzed = () => playBuzz();
+    // お手つき。早押しとは別の音で、聞けば区別できるようにしてある。
+    const onWrong = () => playWrong();
     // 曲データを受け取れるかどうかは、ハンドシェイクで渡した主催キーで決まる。
     // ここで役割を名乗る必要はない（名乗りで権限が付くと参加者に真似される）。
     socket.on("state", onState);
     socket.on("buzzed", onBuzzed);
+    socket.on("wrong", onWrong);
     socket.on("connect", syncState);
     syncState(); // 既に繋がっていた場合の取りこぼしを拾う
     return () => {
       socket.off("state", onState);
       socket.off("buzzed", onBuzzed);
+      socket.off("wrong", onWrong);
       socket.off("connect", syncState);
     };
   }, []);
