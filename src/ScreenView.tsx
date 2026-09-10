@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 import { beep, playBuzz, preloadSfx, unlockAudio } from "./beep";
 import { RoomMissing, useRoomMissing } from "./RoomMissing";
-import { socket } from "./socket";
+import { socket, syncState } from "./socket";
 import type { State } from "./types";
 import { useCountdown } from "./useCountdown";
 
@@ -71,9 +71,12 @@ export default function ScreenView() {
     // ここで役割を名乗る必要はない（名乗りで権限が付くと参加者に真似される）。
     socket.on("state", onState);
     socket.on("buzzed", onBuzzed);
+    socket.on("connect", syncState);
+    syncState(); // 既に繋がっていた場合の取りこぼしを拾う
     return () => {
       socket.off("state", onState);
       socket.off("buzzed", onBuzzed);
+      socket.off("connect", syncState);
     };
   }, []);
 
@@ -294,11 +297,11 @@ export default function ScreenView() {
           // 受付中。上演時間の8割はこの状態なので、いちばん静かにしておく
           <div className="flex flex-col items-center">
             <div className="flex items-baseline gap-[2vw]">
-              <div className="text-[4.2vw] font-medium text-gold">第</div>
-              <div className="font-disp text-[21.9vw] leading-none text-gold-bright">
+              <div className="text-[5vw] font-medium text-gold">第</div>
+              <div className="font-disp text-[17.5vw] leading-none text-gold-bright">
                 {index + 1}
               </div>
-              <div className="text-[4.2vw] font-medium text-gold">問</div>
+              <div className="text-[5vw] font-medium text-gold">問</div>
             </div>
             <div className="mt-[3.4vw] h-px w-[15.6vw] bg-gradient-to-r from-transparent via-gold to-transparent" />
             <div className="pt-[1.7vw] text-[2vw] tracking-[0.1em] text-ink-3">

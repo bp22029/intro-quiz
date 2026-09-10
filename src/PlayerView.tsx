@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RoomMissing, useRoomMissing } from "./RoomMissing";
-import { socket } from "./socket";
+import { socket, syncState } from "./socket";
 import { useCountdown } from "./useCountdown";
 import type { JoinAck, State } from "./types";
 
@@ -77,6 +77,7 @@ export default function PlayerView() {
     const onConnect = () => {
       setConnected(true);
       setMyId(clientId);
+      syncState();
       // サーバーはメモリ管理なので、繋がり直すたびに登録し直す
       const n = nameRef.current;
       if (n) socket.emit("join", { name: n, clientId }, (_ack: JoinAck) => {});
@@ -94,6 +95,7 @@ export default function PlayerView() {
     socket.on("state", onState);
     socket.on("rejoin", onRejoin);
     if (socket.connected) onConnect();
+    else syncState();
 
     return () => {
       socket.off("connect", onConnect);

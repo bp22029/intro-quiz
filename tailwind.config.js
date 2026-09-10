@@ -42,7 +42,7 @@ module.exports = {
         win: {
           DEFAULT: "#0e2a1f",
           glow: "#14402e",
-          corner: "#4d7d67",
+          corner: "#7fb79b", // 隅の問題番号。緑の地で沈まない明るさまで上げた
         },
         // 不正解。ここだけ金を一切使わない
         miss: {
@@ -52,7 +52,7 @@ module.exports = {
           border: "#7a2028",
           ink: "#f7dbd6",
           ink2: "#e6a9a2",
-          corner: "#a06a68",
+          corner: "#d09a95", // 同上（深紅の地）
         },
         // 「正解は…」の溜め
         hush: {

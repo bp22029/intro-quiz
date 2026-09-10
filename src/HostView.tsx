@@ -11,7 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { beep, playBuzz, preloadSfx, unlockAudio } from "./beep";
 import { RoomMissing, useRoomMissing } from "./RoomMissing";
 import { hostPath, roomRef, screenPath } from "./room";
-import { socket } from "./socket";
+import { socket, syncState } from "./socket";
 import { useCountdown } from "./useCountdown";
 import type { PlayMode, Song, State } from "./types";
 import { useYouTube, ytErrorMessage } from "./useYouTube";
@@ -202,12 +202,16 @@ export default function HostView() {
     //
     // 曲データを受け取れるかどうかは、ハンドシェイクで渡した主催キーで決まる。
     // 繋がり直しても役割を名乗る必要はない（名乗りで権限が付くと参加者に真似される）。
-    const onConnect = () => setConnected(true);
+    const onConnect = () => {
+      setConnected(true);
+      syncState();
+    };
     const onDisconnect = () => setConnected(false);
     socket.on("state", onState);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     if (socket.connected) onConnect();
+    else syncState(); // 繋がる前に頼んでおく。socket.io が接続時に送ってくれる
     return () => {
       socket.off("state", onState);
       socket.off("connect", onConnect);
@@ -406,7 +410,7 @@ export default function HostView() {
         xl 未満（ノートPCを半分に割ったときなど）は従来どおり縦1列へ戻す。
       */}
       <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
-        {/* 左列: 進行を押す操作。上から順に手が下りるよう並べる */}
+        {/* 左列: 本番中に押すものだけ。スクロールせずに全部見えることを優先する */}
         <div className="flex flex-col gap-3 xl:w-[44rem] xl:shrink-0">
           {/* 早押し状況 */}
           <div
@@ -493,7 +497,11 @@ export default function HostView() {
             現在の曲だけを枠内に置き、他は枠外へ逃がす。
           */}
           {mode === "youtube" && (
-            <div className="relative aspect-video w-full overflow-hidden rounded-r2 bg-black">
+            <div
+              // 高さに上限を置く。ここは音を出すための枠で、映像は見なくてよい。
+              // 16:9 のまま伸ばすと、本番中に押すボタンが画面の下へ追い出される。
+              className="relative aspect-video max-h-[13rem] w-full overflow-hidden rounded-r2 bg-black"
+            >
               {songs.map((_, i) => (
                 <div
                   key={i}
@@ -546,7 +554,7 @@ export default function HostView() {
                   onPointerUp={() => saveVolume()}
                   onKeyUp={() => saveVolume()}
                   onBlur={() => saveVolume()}
-                  className="h-2 w-full cursor-pointer"
+                  className="h-2 w-full cursor-pointer accent-gold"
                 />
                 <span className="w-10 shrink-0 text-right tabular-nums text-ink-2">
                   {shownVolume}
@@ -599,7 +607,7 @@ export default function HostView() {
               <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-r2 border border-dashed border-chip px-4 py-3 text-ink-2">
                 <input
                   type="checkbox"
-                  className="h-5 w-5"
+                  className="h-5 w-5 accent-gold"
                   checked={autoChorus}
                   onChange={(e) => setAutoChorus(e.target.checked)}
                 />
@@ -694,122 +702,9 @@ export default function HostView() {
             </Btn>
           </div>
 
-          {/* 演出の調整。当日その場で耳と目を合わせられるようにする */}
-          <div className="rounded-r2 bg-panel p-4">
-            <div className="pb-3 text-ink-3">演出の調整</div>
-
-            {/*
-              全体音量。曲ごとに設定していない曲はすべてこの値で鳴る。
-              まずここで会場に合わせ、目立つ曲だけ上の「この曲」で直す。
-            */}
-            {mode === "youtube" && (
-              <label className="mb-4 flex items-center gap-3">
-                <span className="shrink-0 text-sm text-ink-3">全体音量</span>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={masterVolume}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    socket.emit("host:setMasterVolume", v);
-                    // 個別設定の無い曲は即座に反映する
-                    if (!hasOwnVolume) yt.setVolume(index, v);
-                  }}
-                  className="h-2 w-full cursor-pointer"
-                />
-                <span className="w-10 shrink-0 text-right tabular-nums text-ink-2">
-                  {masterVolume}
-                </span>
-              </label>
-            )}
-
-            {mode === "youtube" && (
-              <label className="mb-4 flex cursor-pointer items-start gap-3">
-                <input
-                  type="checkbox"
-                  className="mt-1 h-5 w-5"
-                  checked={runUp}
-                  onChange={(e) => socket.emit("host:setRunUp", e.target.checked)}
-                />
-                <span className="flex-1 text-ink-2">
-                  「正解は…」の溜めから助走を鳴らす
-                  <span className="block text-xs text-ink-3">
-                    溜めの長さぶんサビの手前から、音量を上げながら再生します。答えが出る
-                    瞬間にサビの頭が来ます。切ると溜めは無音になり、答えが出てから
-                    サビへ飛びます。
-                  </span>
-                </span>
-              </label>
-            )}
-
-            {/*
-              早押しの音の確認。鳴らすのは投影画面だが、参加者に押してもらわずに
-              音が出るか確かめられるよう、ここから試聴できるようにしておく。
-            */}
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <span className="text-sm text-ink-3">早押しの音</span>
-              <button
-                onClick={(e) => {
-                  e.currentTarget.blur();
-                  playBuzz();
-                }}
-                className="rounded-r1 border border-chip px-3 py-2 text-sm text-ink-2 hover:bg-sink"
-              >
-                試聴
-              </button>
-              <span className="text-xs text-ink-3">
-                本番は投影画面から鳴ります
-              </span>
-            </div>
-
-            <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2">
-                <span className="text-sm text-ink-3">「正解は…」の長さ</span>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max="10"
-                  value={state.suspenseMs / 1000}
-                  onChange={(e) =>
-                    socket.emit("host:setSuspense", Number(e.target.value) * 1000)
-                  }
-                  className="w-20 rounded-r1 bg-sink px-3 py-2 text-center text-ink outline-none focus:ring-2 focus:ring-gold"
-                />
-                <span className="text-sm text-ink-3">秒</span>
-              </label>
-
-              {mode === "manual" && (
-                <label className="flex items-center gap-2">
-                  <span className="text-sm text-ink-3">サビを鳴らすまで</span>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="10"
-                    value={chorusDelay}
-                    onChange={(e) => {
-                      const v = Math.max(0, Math.min(10, Number(e.target.value)));
-                      setChorusDelay(v);
-                      localStorage.setItem(CHORUS_DELAY_KEY, String(v));
-                    }}
-                    className="w-20 rounded-r1 bg-sink px-3 py-2 text-center text-ink outline-none focus:ring-2 focus:ring-gold"
-                  />
-                  <span className="text-sm text-ink-3">秒</span>
-                </label>
-              )}
-            </div>
-            <p className="mt-2 text-xs text-chip-ink">
-              どちらも「正解」を押した時点からの秒数です。YouTube の読み込みぶん音が遅れるので、
-              サビは投影より早めに投げると揃います。
-            </p>
-          </div>
-
         </div>
 
-        {/* 右列: 見て選ぶもの。進行中はあまり触らない */}
+        {/* 右列: 見るものと、開演前に決めるもの。進行中はほとんど触らない */}
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           {/* 参加者 */}
           <div className="rounded-r2 bg-panel p-4">
@@ -933,6 +828,119 @@ export default function HostView() {
                 onCancel={() => setDraft(null)}
               />
             )}
+          </div>
+
+          {/* 演出の調整。当日その場で耳と目を合わせられるようにする */}
+          <div className="rounded-r2 bg-panel p-4">
+            <div className="pb-3 text-ink-3">演出の調整</div>
+
+            {/*
+              全体音量。曲ごとに設定していない曲はすべてこの値で鳴る。
+              まずここで会場に合わせ、目立つ曲だけ上の「この曲」で直す。
+            */}
+            {mode === "youtube" && (
+              <label className="mb-4 flex items-center gap-3">
+                <span className="shrink-0 text-sm text-ink-3">全体音量</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={masterVolume}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    socket.emit("host:setMasterVolume", v);
+                    // 個別設定の無い曲は即座に反映する
+                    if (!hasOwnVolume) yt.setVolume(index, v);
+                  }}
+                  className="h-2 w-full cursor-pointer accent-gold"
+                />
+                <span className="w-10 shrink-0 text-right tabular-nums text-ink-2">
+                  {masterVolume}
+                </span>
+              </label>
+            )}
+
+            {mode === "youtube" && (
+              <label className="mb-4 flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-5 w-5 accent-gold"
+                  checked={runUp}
+                  onChange={(e) => socket.emit("host:setRunUp", e.target.checked)}
+                />
+                <span className="flex-1 text-ink-2">
+                  「正解は…」の溜めから助走を鳴らす
+                  <span className="block text-xs text-ink-3">
+                    溜めの長さぶんサビの手前から、音量を上げながら再生します。答えが出る
+                    瞬間にサビの頭が来ます。切ると溜めは無音になり、答えが出てから
+                    サビへ飛びます。
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {/*
+              早押しの音の確認。鳴らすのは投影画面だが、参加者に押してもらわずに
+              音が出るか確かめられるよう、ここから試聴できるようにしておく。
+            */}
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <span className="text-sm text-ink-3">早押しの音</span>
+              <button
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  playBuzz();
+                }}
+                className="rounded-r1 border border-chip px-3 py-2 text-sm text-ink-2 hover:bg-sink"
+              >
+                試聴
+              </button>
+              <span className="text-xs text-ink-3">
+                本番は投影画面から鳴ります
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2">
+                <span className="text-sm text-ink-3">「正解は…」の長さ</span>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="10"
+                  value={state.suspenseMs / 1000}
+                  onChange={(e) =>
+                    socket.emit("host:setSuspense", Number(e.target.value) * 1000)
+                  }
+                  className="w-20 rounded-r1 bg-sink px-3 py-2 text-center text-ink outline-none focus:ring-2 focus:ring-gold"
+                />
+                <span className="text-sm text-ink-3">秒</span>
+              </label>
+
+              {mode === "manual" && (
+                <label className="flex items-center gap-2">
+                  <span className="text-sm text-ink-3">サビを鳴らすまで</span>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="10"
+                    value={chorusDelay}
+                    onChange={(e) => {
+                      const v = Math.max(0, Math.min(10, Number(e.target.value)));
+                      setChorusDelay(v);
+                      localStorage.setItem(CHORUS_DELAY_KEY, String(v));
+                    }}
+                    className="w-20 rounded-r1 bg-sink px-3 py-2 text-center text-ink outline-none focus:ring-2 focus:ring-gold"
+                  />
+                  <span className="text-sm text-ink-3">秒</span>
+                </label>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-chip-ink">
+              どちらも「正解」を押した時点からの秒数です。YouTube の読み込みぶん音が遅れるので、
+              サビは投影より早めに投げると揃います。
+            </p>
           </div>
         </div>
       </div>
