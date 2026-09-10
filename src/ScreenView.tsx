@@ -1,6 +1,6 @@
 // 投影画面。表示専用。操作は一切受け付けない（操作は /host で行う）。
 // 表示内容はサーバーの state をそのまま描くだけ。
-// 曲は鳴らさない。YouTubeモードの再生は再生窓(/sound)が担当する。
+// 曲は鳴らさない。YouTubeモードの再生は管理画面(/host)が担当する。
 // ここに iframe を置かないことで、いちばん壊れてほしくない画面を軽く保つ。
 import { useEffect, useState } from "react";
 import { beep, unlockAudio } from "./beep";
@@ -23,13 +23,6 @@ const EMPTY: State = {
   },
   mode: "manual",
   songs: [],
-  ytStatus: {
-    ready: false,
-    readyCount: 0,
-    total: 0,
-    connected: false,
-    visible: true,
-  },
   suspenseMs: 2000,
 };
 
@@ -38,7 +31,7 @@ export default function ScreenView() {
   const [url, setUrl] = useState<string>(window.location.origin);
   const [ready, setReady] = useState(false); // 「準備」クリック済みか
 
-  // playing は投影画面では使わない（曲は再生窓が鳴らし、秒数表示も廃止した）
+  // playing は投影画面では使わない（曲は管理画面が鳴らし、秒数表示も廃止した）
   const { index, revealed, wrongName, resumeInMs, revealInMs } = state.round;
   const songs = state.songs;
   const song = songs[index];

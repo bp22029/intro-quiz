@@ -1,11 +1,18 @@
 // 管理画面。手元のノートPCで開き、クリックで進行する。
 // ノートPCの左半分に置き、右半分で YouTube を手動再生する想定なので、
 // 幅が狭くても崩れないレイアウトにしている。
+//
+// YouTubeモードの曲もこの画面が鳴らす。投影画面や別窓ではなくここに置くのは、
+// Chrome が「隠れている画面で始めた再生」を前面に来るまで延期するため
+// (https://www.chromium.org/audio-video/autoplay/)。
+// 再生ボタンを押す瞬間、この画面は必ず前面にあるので、延期される条件が
+// 原理的に成立しない。別窓に分けると並べて配置し続ける必要が出てしまう。
 import { useCallback, useEffect, useRef, useState } from "react";
 import { beep, unlockAudio } from "./beep";
 import { socket } from "./socket";
 import { useCountdown } from "./useCountdown";
 import type { PlayMode, Song, State } from "./types";
+import { useYouTube, ytErrorMessage } from "./useYouTube";
 
 const EMPTY: State = {
   buzzedBy: null,
@@ -22,13 +29,6 @@ const EMPTY: State = {
   },
   mode: "manual",
   songs: [],
-  ytStatus: {
-    ready: false,
-    readyCount: 0,
-    total: 0,
-    connected: false,
-    visible: true,
-  },
   suspenseMs: 2000,
 };
 
@@ -85,6 +85,7 @@ export default function HostView() {
   const songs = state.songs;
   const { index, revealed, playing, wrongName, resumeInMs, revealInMs } =
     state.round;
+
   const suspense = revealInMs > 0 && !revealed; // 「正解は…」の溜め中
   const mode = state.mode;
   const song = songs[index];
@@ -92,6 +93,10 @@ export default function HostView() {
   const last = songs.length - 1;
   const countdown = useCountdown(resumeInMs);
   const showWrong = wrongName !== null;
+
+  // YouTubeモードのときだけプレイヤーを作る（手動モードでは1つも作らない）
+  const yt = useYouTube(songs, mode === "youtube");
+  const ytError: number | undefined = yt.errors[index];
 
   useEffect(() => {
     const onState = (s: State) => setState(s);
@@ -128,6 +133,42 @@ export default function HostView() {
     },
     [],
   );
+
+  // --- ここから YouTubeモードの再生制御 ---
+
+  // 準備が整う前に再生を要求されていた場合、整った時点で鳴らし直す。
+  // これがないと「サーバーは再生中なのに音が出ない」状態のままになる。
+  useEffect(() => {
+    if (mode === "youtube" && playing && yt.ready && !revealed) {
+      yt.play(index);
+    }
+  }, [yt.ready, mode, playing, revealed, index, yt]);
+
+  // サーバー状態に合わせてプレイヤーを追従させる
+  const prevPlay = useRef({ index: -1, revealed: false, playing: false });
+  useEffect(() => {
+    if (mode !== "youtube") return;
+    const p = prevPlay.current;
+
+    if (p.index !== index) {
+      yt.pause(p.index);
+      yt.seekToStart(index);
+    } else if (revealed && !p.revealed) {
+      // 答えを出した瞬間にサビへ飛ぶ
+      yt.seekAndPlay(index, song?.chorusSec ?? song?.startSec ?? 0);
+    } else if (playing && !p.playing) {
+      yt.play(index);
+    } else if (!playing && p.playing) {
+      yt.pause(index);
+    }
+
+    prevPlay.current = { index, revealed, playing };
+  }, [mode, index, revealed, playing, yt, song]);
+
+  // 答えを消したときはサビも止める
+  useEffect(() => {
+    if (mode === "youtube" && !revealed && !playing) yt.pause(index);
+  }, [revealed, playing, mode, yt, index]);
 
   if (!armed) {
     return (
@@ -240,41 +281,41 @@ export default function HostView() {
         )}
       </div>
 
-      {mode === "youtube" && !state.ytStatus.connected && (
-        <div className="rounded-2xl border-2 border-amber-500 bg-amber-950/60 p-4 text-amber-100">
-          <div className="font-bold">再生窓が開いていません</div>
-          <div className="mt-1 text-sm text-amber-200">
-            YouTubeモードは再生窓が鳴らします。
-            <code className="rounded bg-black/40 px-1.5 py-0.5">/sound</code>{" "}
-            を別ウィンドウで開き、「この窓を使う」をクリックしてください。
-            この画面と並べて、見える位置に置いてください。
-          </div>
-          <button
-            onClick={(e) => {
-              e.currentTarget.blur();
-              // タブではなくウィンドウとして開く。裏のタブに隠れると
-              // Chrome が再生を延期してしまうため。
-              window.open("/sound", SOUND_WIN, "width=720,height=460");
-              window.focus();
-            }}
-            className="mt-3 rounded-lg bg-amber-600 px-4 py-2 font-bold text-neutral-950 hover:bg-amber-500"
-          >
-            再生窓を開く
-          </button>
+      {/*
+        プレイヤー。YouTubeモードのときだけ作る。
+        映像は隠さない（埋め込みプレーヤーは可視であることが求められる）。
+        現在の曲だけを枠内に置き、他は枠外へ逃がす。
+      */}
+      {mode === "youtube" && (
+        <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
+          {songs.map((_, i) => (
+            <div
+              key={i}
+              className="absolute h-full w-full"
+              style={
+                i === index ? { left: 0, top: 0 } : { left: "-200vw", top: 0 }
+              }
+            >
+              <div className="h-full w-full" ref={yt.registerRef(i)} />
+            </div>
+          ))}
+
+          {!yt.ready && (
+            <div className="absolute inset-0 flex items-center justify-center bg-neutral-950/90 text-neutral-300">
+              動画を準備中… {yt.readyCount} / {yt.total}
+            </div>
+          )}
+
+          {ytError !== undefined && (
+            <div className="absolute inset-x-4 bottom-4 rounded-xl border-2 border-red-500 bg-red-950/95 px-4 py-3 text-center text-red-200">
+              この曲は再生できません（{ytErrorMessage(ytError)}）
+              <div className="mt-1 text-sm text-red-300">
+                手動モードへ切り替えてください
+              </div>
+            </div>
+          )}
         </div>
       )}
-
-      {mode === "youtube" &&
-        state.ytStatus.connected &&
-        !state.ytStatus.visible && (
-          <div className="rounded-2xl border-2 border-amber-500 bg-amber-950/60 p-4 text-amber-100">
-            <div className="font-bold">再生窓が画面に出ていません</div>
-            <div className="mt-1 text-sm text-amber-200">
-              裏のタブに隠れている間、Chrome は再生を前面に来るまで延期します。
-              このまま再生を押しても鳴りません。再生窓をこの画面と並べてください。
-            </div>
-          </div>
-        )}
 
       {/* 操作ボタン */}
       <div className="grid grid-cols-2 gap-3">
@@ -283,23 +324,14 @@ export default function HostView() {
             tone={playing ? "amber" : "blue"}
             onClick={() => socket.emit(playing ? "host:pause" : "host:play")}
             className="col-span-2"
-            // 未接続・未準備・隠れている状態で押すと
-            // 「再生中なのに音が出ない」になるので止める
-            disabled={
-              !state.ytStatus.connected ||
-              !state.ytStatus.visible ||
-              !state.ytStatus.ready
-            }
+            // 未準備のまま押すと「再生中なのに音が出ない」状態になるので止める
+            disabled={!yt.ready}
           >
-            {!state.ytStatus.connected
-              ? "再生窓が未接続"
-              : !state.ytStatus.visible
-                ? "再生窓を画面に出してください"
-                : state.ytStatus.ready
-                  ? playing
-                    ? "⏸ 一時停止"
-                    : "▶ イントロ再生"
-                  : `動画を準備中… ${state.ytStatus.readyCount}/${state.ytStatus.total}`}
+            {yt.ready
+              ? playing
+                ? "⏸ 一時停止"
+                : "▶ イントロ再生"
+              : `動画を準備中… ${yt.readyCount}/${yt.total}`}
           </Btn>
         ) : (
           <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-neutral-700 px-4 py-3 text-neutral-300">
@@ -821,9 +853,6 @@ export function ytUrl(videoId: string, sec: number): string {
 
 /** 曲再生用のタブ。同じ名前を使うことでタブが増え続けないようにする */
 const YT_TAB = "introquiz-player";
-
-/** 再生窓(/sound)。同じ名前を使うので、何度押しても窓は増えない */
-const SOUND_WIN = "introquiz-sound";
 
 /** サビ再生までの待ち時間の保存先。端末ごとに覚えておく */
 const CHORUS_DELAY_KEY = "introquiz:chorusDelay";
