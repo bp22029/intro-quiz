@@ -17,16 +17,6 @@ export type YouTubeController = {
   /** 曲index -> YouTube エラーコード。onError で埋める */
   errors: Record<number, number>;
 
-  /**
-   * 全プレイヤーが「解錠」済みか。
-   * クロスオリジンの iframe は、親ページでクリックしても自動再生の許可を
-   * 引き継がない。各プレイヤーは一度ユーザー操作の中で再生されるまで、
-   * プログラムからの playVideo() を拒む。primeAll() でそれを済ませる。
-   */
-  primed: boolean;
-  /** ユーザー操作の中から呼ぶこと。全曲をミュートで一瞬鳴らして即止める */
-  primeAll: () => void;
-
   /** 各曲の <div> に付ける ref コールバックを返す。<div ref={ctrl.registerRef(i)} /> */
   registerRef: (index: number) => (el: HTMLDivElement | null) => void;
 
@@ -98,9 +88,6 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
   const [refVersion, setRefVersion] = useState(0);
   const [readyCount, setReadyCount] = useState(0);
   const [errors, setErrors] = useState<Record<number, number>>({});
-  const [primed, setPrimed] = useState(false);
-  // 解錠中の曲index。再生が始まった通知を受けたら止める。
-  const primingRef = useRef<Set<number>>(new Set());
 
   enabledRef.current = enabled;
   songsRef.current = songs;
@@ -138,10 +125,8 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
     playersRef.current = [];
     readyFlagsRef.current = Array(songs.length).fill(false);
     errorsRef.current = {};
-    primingRef.current = new Set();
     setReadyCount(0);
     setErrors({});
-    setPrimed(false); // プレイヤーを作り直したら解錠もやり直し
 
     if (!enabled) return;
 
@@ -178,20 +163,6 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
                 if (!readyFlagsRef.current[index]) {
                   readyFlagsRef.current[index] = true;
                   setReadyCount((count) => count + 1);
-                }
-              },
-              onStateChange: (event: any) => {
-                if (cancelled || generationRef.current !== generation) return;
-                // 1 = PLAYING。解錠のために鳴らしたものなら、すぐ止めて戻す。
-                if (Number(event.data) !== 1) return;
-                if (!primingRef.current.delete(index)) return;
-
-                try {
-                  event.target.pauseVideo();
-                  event.target.seekTo(song.startSec, true);
-                  event.target.unMute();
-                } catch {
-                  // 解錠は「できたらよい」処理。失敗しても進行は止めない。
                 }
               },
               onError: (event: any) => {
@@ -283,42 +254,6 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
     [getControllablePlayer],
   );
 
-  /**
-   * 全プレイヤーを一度だけミュートで鳴らして解錠する。**必ずクリック等の
-   * ユーザー操作の中から同期的に呼ぶこと。** これをしないと、再生窓を背面に
-   * 置いたときに最初の1回だけ鳴らない。
-   */
-  const primeAll = useCallback((): void => {
-    playersRef.current.forEach((player, index) => {
-      if (!player || !readyFlagsRef.current[index]) return;
-      if (Object.prototype.hasOwnProperty.call(errorsRef.current, index)) return;
-
-      try {
-        primingRef.current.add(index);
-        player.mute();
-        player.playVideo();
-      } catch {
-        primingRef.current.delete(index);
-      }
-    });
-
-    // 再生開始の通知が来ない場合の保険。鳴りっぱなしにしない。
-    setTimeout(() => {
-      playersRef.current.forEach((player, index) => {
-        if (!primingRef.current.delete(index) || !player) return;
-        try {
-          player.pauseVideo();
-          player.seekTo(songsRef.current[index]?.startSec ?? 0, true);
-          player.unMute();
-        } catch {
-          // 破棄済みなどは無視する
-        }
-      });
-    }, 4000);
-
-    setPrimed(true);
-  }, []);
-
   const seekToStart = useCallback(
     (index: number): void => {
       const player = getControllablePlayer(index);
@@ -341,8 +276,6 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
     readyCount: visibleReadyCount,
     total: songs.length,
     errors: enabled ? errors : {},
-    primed: enabled ? primed : false,
-    primeAll,
     registerRef,
     play,
     pause,

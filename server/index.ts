@@ -98,7 +98,13 @@ let songs: Song[] = loadSongsFromDisk();
 // 投影画面が報告する YouTube プレイヤーの準備状況。
 // 未準備のまま再生を要求すると「サーバーは再生中なのに音が出ない」状態になるため、
 // 管理画面がこれを見て再生ボタンを止められるようにする。
-let ytStatus = { ready: false, readyCount: 0, total: 0, connected: false };
+let ytStatus = {
+  ready: false,
+  readyCount: 0,
+  total: 0,
+  connected: false,
+  visible: true,
+};
 
 // 繋がっている再生窓(/sound)。空になったら ytStatus を未接続へ戻す。
 const soundSockets = new Set<string>();
@@ -246,12 +252,19 @@ io.on("connection", (socket) => {
   /** 再生窓が YouTube プレイヤーの準備状況を知らせる */
   socket.on("sound:yt", (raw: unknown) => {
     if (!raw || typeof raw !== "object") return;
-    const o = raw as { ready?: unknown; readyCount?: unknown; total?: unknown };
+    const o = raw as {
+      ready?: unknown;
+      readyCount?: unknown;
+      total?: unknown;
+      visible?: unknown;
+    };
     ytStatus = {
       ready: o.ready === true,
       readyCount: Number(o.readyCount) || 0,
       total: Number(o.total) || 0,
       connected: soundSockets.size > 0,
+      // 報告が無い相手は「見えている」扱いにする。誤警告を出さないため。
+      visible: o.visible !== false,
     };
     broadcastState();
   });
@@ -482,7 +495,13 @@ io.on("connection", (socket) => {
     // 再生窓が全部閉じたら、準備状況を未接続へ戻す。
     // 残したままだと管理画面が「準備完了」と誤認して再生ボタンを許してしまう。
     if (soundSockets.delete(socket.id) && soundSockets.size === 0) {
-      ytStatus = { ready: false, readyCount: 0, total: 0, connected: false };
+      ytStatus = {
+        ready: false,
+        readyCount: 0,
+        total: 0,
+        connected: false,
+        visible: true,
+      };
       broadcastState();
     }
 

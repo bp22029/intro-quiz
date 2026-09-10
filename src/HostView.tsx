@@ -22,7 +22,13 @@ const EMPTY: State = {
   },
   mode: "manual",
   songs: [],
-  ytStatus: { ready: false, readyCount: 0, total: 0, connected: false },
+  ytStatus: {
+    ready: false,
+    readyCount: 0,
+    total: 0,
+    connected: false,
+    visible: true,
+  },
   suspenseMs: 2000,
 };
 
@@ -238,14 +244,17 @@ export default function HostView() {
         <div className="rounded-2xl border-2 border-amber-500 bg-amber-950/60 p-4 text-amber-100">
           <div className="font-bold">再生窓が開いていません</div>
           <div className="mt-1 text-sm text-amber-200">
-            YouTubeモードは再生窓が鳴らします。別ウィンドウで{" "}
+            YouTubeモードは再生窓が鳴らします。
             <code className="rounded bg-black/40 px-1.5 py-0.5">/sound</code>{" "}
-            を開き、「再生を有効にする」をクリックしてください。
+            を別ウィンドウで開き、「この窓を使う」をクリックしてください。
+            この画面と並べて、見える位置に置いてください。
           </div>
           <button
             onClick={(e) => {
               e.currentTarget.blur();
-              window.open("/sound", SOUND_WIN);
+              // タブではなくウィンドウとして開く。裏のタブに隠れると
+              // Chrome が再生を延期してしまうため。
+              window.open("/sound", SOUND_WIN, "width=720,height=460");
               window.focus();
             }}
             className="mt-3 rounded-lg bg-amber-600 px-4 py-2 font-bold text-neutral-950 hover:bg-amber-500"
@@ -255,6 +264,18 @@ export default function HostView() {
         </div>
       )}
 
+      {mode === "youtube" &&
+        state.ytStatus.connected &&
+        !state.ytStatus.visible && (
+          <div className="rounded-2xl border-2 border-amber-500 bg-amber-950/60 p-4 text-amber-100">
+            <div className="font-bold">再生窓が画面に出ていません</div>
+            <div className="mt-1 text-sm text-amber-200">
+              裏のタブに隠れている間、Chrome は再生を前面に来るまで延期します。
+              このまま再生を押しても鳴りません。再生窓をこの画面と並べてください。
+            </div>
+          </div>
+        )}
+
       {/* 操作ボタン */}
       <div className="grid grid-cols-2 gap-3">
         {mode === "youtube" ? (
@@ -262,16 +283,23 @@ export default function HostView() {
             tone={playing ? "amber" : "blue"}
             onClick={() => socket.emit(playing ? "host:pause" : "host:play")}
             className="col-span-2"
-            // 未接続・未準備のまま押すと「再生中なのに音が出ない」状態になるので止める
-            disabled={!state.ytStatus.connected || !state.ytStatus.ready}
+            // 未接続・未準備・隠れている状態で押すと
+            // 「再生中なのに音が出ない」になるので止める
+            disabled={
+              !state.ytStatus.connected ||
+              !state.ytStatus.visible ||
+              !state.ytStatus.ready
+            }
           >
             {!state.ytStatus.connected
               ? "再生窓が未接続"
-              : state.ytStatus.ready
-                ? playing
-                  ? "⏸ 一時停止"
-                  : "▶ イントロ再生"
-                : `動画を準備中… ${state.ytStatus.readyCount}/${state.ytStatus.total}`}
+              : !state.ytStatus.visible
+                ? "再生窓を画面に出してください"
+                : state.ytStatus.ready
+                  ? playing
+                    ? "⏸ 一時停止"
+                    : "▶ イントロ再生"
+                  : `動画を準備中… ${state.ytStatus.readyCount}/${state.ytStatus.total}`}
           </Btn>
         ) : (
           <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-neutral-700 px-4 py-3 text-neutral-300">

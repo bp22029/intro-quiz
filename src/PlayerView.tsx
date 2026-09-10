@@ -42,7 +42,13 @@ const EMPTY: State = {
   },
   mode: "manual",
   songs: [],
-  ytStatus: { ready: false, readyCount: 0, total: 0, connected: false },
+  ytStatus: {
+    ready: false,
+    readyCount: 0,
+    total: 0,
+    connected: false,
+    visible: true,
+  },
   suspenseMs: 2000,
 };
 

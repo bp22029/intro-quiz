@@ -69,6 +69,23 @@ check(
     hostState.state?.ytStatus?.connected === true,
 );
 
+// --- 可視状態の報告 ---
+// Chrome は隠れた窓で始めた再生を延期するので、隠れていることを
+// 管理画面が知って警告できる必要がある。
+sound.emit("sound:yt", { ready: true, readyCount: total, total, visible: false });
+await wait(D);
+check(
+  "再生窓が隠れたことが管理画面へ届く",
+  hostState.state?.ytStatus?.visible === false,
+);
+
+sound.emit("sound:yt", { ready: true, readyCount: total, total, visible: true });
+await wait(D);
+check(
+  "再生窓が見えたことが管理画面へ届く",
+  hostState.state?.ytStatus?.visible === true,
+);
+
 // --- 不正な報告を無視する ---
 sound.emit("sound:yt", "こわれた値");
 await wait(D);

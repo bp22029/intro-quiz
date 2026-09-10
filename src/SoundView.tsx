@@ -5,7 +5,14 @@
 //   - 映像を隠さないので YouTube の埋め込みポリシーに沿う
 //   - 投影画面から iframe が消え、いちばん壊れてほしくない画面が軽くなる
 //
-// 手元PCで /host の隣に並べて置く想定。表示専用で、操作は一切受け付けない。
+// **この窓は画面に見えている必要がある。**
+// Chrome は「背面タブで開始された再生」を、そのタブが前面に来るまで延期する
+// （https://www.chromium.org/audio-video/autoplay/）。許可の問題ではないので
+// 事前にクリックしても回避できない。
+// ただし Page Visibility の定義では、別ウィンドウでフォーカスが無いだけの状態は
+// hidden ではない。つまり /host と並べて置けば問題なく鳴る。裏のタブに
+// 隠したときだけ鳴らない。無言で失敗すると当日いちばん困るので、
+// 隠れていることを検知して管理画面に警告を出す。
 import { useEffect, useRef, useState } from "react";
 import { socket } from "./socket";
 import type { State } from "./types";
@@ -26,13 +33,23 @@ const EMPTY: State = {
   },
   mode: "manual",
   songs: [],
-  ytStatus: { ready: false, readyCount: 0, total: 0, connected: false },
+  ytStatus: {
+    ready: false,
+    readyCount: 0,
+    total: 0,
+    connected: false,
+    visible: true,
+  },
   suspenseMs: 2000,
 };
 
 export default function SoundView() {
   const [state, setState] = useState<State>(EMPTY);
   const [connected, setConnected] = useState(socket.connected);
+  const [armed, setArmed] = useState(false); // 「この窓を使う」クリック済みか
+  const [visible, setVisible] = useState(
+    () => document.visibilityState !== "hidden",
+  );
 
   const { index, revealed, playing } = state.round;
   const mode = state.mode;
@@ -60,23 +77,33 @@ export default function SoundView() {
     };
   }, []);
 
-  // プレイヤーの準備状況を管理画面へ知らせる。
-  // 解錠(primed)まで済んで初めて「再生できる」ので、ready に含める。
+  // この窓が隠れたら知らせる。隠れている間の再生要求は Chrome に延期されるので、
+  // 管理画面が先に「前に出してください」と言えるようにする。
+  useEffect(() => {
+    const onVisibility = () =>
+      setVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
+  // プレイヤーの準備状況と可視状態を管理画面へ知らせる
   useEffect(() => {
     socket.emit("sound:yt", {
-      ready: yt.ready && yt.primed,
+      ready: yt.ready,
       readyCount: yt.readyCount,
       total: yt.total,
+      visible,
     });
-  }, [yt.ready, yt.primed, yt.readyCount, yt.total]);
+  }, [yt.ready, yt.readyCount, yt.total, visible]);
 
-  // 準備が整う前に再生を要求されていた場合、整った時点で鳴らし直す。
+  // 準備が整う前、または隠れている間に再生を要求されていた場合、
+  // 整った時点・見えた時点で鳴らし直す。
   // これがないと「管理画面は再生中なのに音が出ない」状態のままになる。
   useEffect(() => {
-    if (mode === "youtube" && playing && yt.ready && yt.primed && !revealed) {
+    if (mode === "youtube" && playing && yt.ready && visible && !revealed) {
       yt.play(index);
     }
-  }, [yt.ready, yt.primed, mode, playing, revealed, index, yt]);
+  }, [yt.ready, visible, mode, playing, revealed, index, yt]);
 
   // --- サーバー状態に合わせて YouTube プレイヤーを追従させる ---
   const prev = useRef({ index: -1, revealed: false, playing: false });
@@ -114,7 +141,7 @@ export default function SoundView() {
         </span>
         <span className="text-neutral-500">
           {mode === "youtube"
-            ? yt.primed
+            ? yt.ready
               ? `第 ${index + 1} 問 / 全曲 準備完了`
               : `準備中 ${yt.readyCount} / ${yt.total} 曲`
             : "手動モード（この窓は鳴りません）"}
@@ -133,9 +160,7 @@ export default function SoundView() {
       ) : (
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl bg-black">
           {/* 現在の曲だけを画面内に置き、他は画面外へ逃がす。
-              映像は隠さない（埋め込みプレーヤーは可視であることが求められる）。
-              解錠の前からプレイヤーを作っておく必要があるので、
-              このブロックは常に描く。 */}
+              映像は隠さない（埋め込みプレーヤーは可視であることが求められる）。 */}
           {songs.map((_, i) => (
             <div
               key={i}
@@ -148,32 +173,34 @@ export default function SoundView() {
             </div>
           ))}
 
-          {/*
-            解錠されるまで覆う。クロスオリジンの iframe は、親ページでクリック
-            しても自動再生の許可を引き継がない。各プレイヤーを一度ユーザー操作の
-            中で鳴らしておかないと、この窓を背面に置いたとき最初の1回が鳴らない。
-          */}
-          {!yt.primed && (
+          {!armed && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 bg-neutral-950/95 p-8 text-center">
               <h1 className="text-3xl font-black">再生窓</h1>
               <button
-                disabled={!yt.ready}
                 onClick={(e) => {
                   e.currentTarget.blur();
-                  // クリックの中から同期的に呼ぶ。await を挟むと許可が切れる。
-                  yt.primeAll();
+                  setArmed(true);
                 }}
-                className="rounded-2xl bg-red-600 px-12 py-6 text-3xl font-bold hover:bg-red-500 disabled:bg-neutral-700 disabled:text-neutral-500"
+                className="rounded-2xl bg-red-600 px-12 py-6 text-3xl font-bold hover:bg-red-500"
               >
-                {yt.ready
-                  ? "再生を有効にする"
-                  : `動画を準備中… ${yt.readyCount} / ${yt.total}`}
+                この窓を使う
               </button>
               <p className="max-w-md text-neutral-400">
-                この窓が曲を鳴らします。管理画面の隣に置いてください。
-                クリックすると全曲を一瞬だけ無音で鳴らして解錠します。
-                これをしないと、窓を背面に置いたとき最初の1曲が鳴りません。
+                この窓が曲を鳴らします。
+                <b className="text-neutral-200">
+                  管理画面と並べて、画面に見える位置に置いてください。
+                </b>
+                裏のタブに隠すと、Chrome が再生を前面に来るまで延期するため鳴りません。
               </p>
+            </div>
+          )}
+
+          {armed && !visible && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-amber-950/90 p-8 text-center text-amber-100">
+              <div className="text-2xl font-black">この窓が隠れています</div>
+              <div className="max-w-md">
+                隠れている間は再生されません。管理画面と並べて表示してください。
+              </div>
             </div>
           )}
 
