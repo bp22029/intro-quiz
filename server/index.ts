@@ -519,10 +519,17 @@ io.on("connection", (socket) => {
   socket.emit("state", stateFor(socket, R));
 
   /**
-   * 古いクライアントが送ってくる役割の申告。state を送り直すだけで、
-   * 権限は一切与えない。権限はハンドシェイクの hostKey だけで決まる。
+   * state を送り直す。
+   *
+   * 接続直後の1通は、クライアントが listener を張る前に届くことがある。
+   * ブラウザ側の socket はモジュール読み込み時に繋ぎに行くので、React が
+   * useEffect で on("state") を張るより先に接続が完了しうる。そのとき
+   * 最初の state は誰にも拾われずに消え、画面は空のまま止まる。
+   * 各画面はマウント時に state:sync を送って必ず取り直す。
    */
   const resend = () => socket.emit("state", stateFor(socket, R));
+  socket.on("state:sync", resend);
+  // 古いクライアントが送ってくる役割の申告。送り直すだけで権限は与えない。
   socket.on("role:screen", resend);
   socket.on("role:host", resend);
 

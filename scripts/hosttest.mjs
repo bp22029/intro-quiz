@@ -1,6 +1,7 @@
 // 管理画面(/host)の操作が投影画面(/screen)へ正しく伝わるかを検証する。
 // 画面を分けたことで、進行状態がサーバー共有になっているのが前提。
 //   node scripts/hosttest.mjs [url]
+import { io } from "socket.io-client";
 import {
   connectHost,
   connectPlayer,
@@ -130,6 +131,26 @@ check("押されたら再生状態が止まる", screen.lastState.round.playing 
 host.emit("host:pause");
 await wait(D);
 check("一時停止が伝わる", screen.lastState.round.playing === false);
+
+// --- 接続してから listener を張っても state を取り直せる ---
+// ブラウザ側の socket はモジュール読み込み時に繋ぎに行くので、React が
+// on("state") を張るより先に接続が完了しうる。そのとき接続直後の1通は
+// 誰にも拾われずに消え、画面が空のまま止まる（実際そうなっていた）。
+{
+  const lateListener = io(URL, { transports: ["websocket"], auth: { hostKey: room.hostKey } });
+  await new Promise((res) => lateListener.on("connect", res));
+  await wait(D); // 接続直後の state をわざと取りこぼす
+  let got = null;
+  lateListener.on("state", (st) => (got = st));
+  await wait(D);
+  check("listener を張っただけでは state は来ない（前提）", got === null);
+  lateListener.emit("state:sync");
+  await wait(D);
+  check("state:sync で取り直せる", got !== null);
+  check("取り直した state に部屋コードが入っている", got?.roomCode === room.code);
+  check("取り直した state に曲データが入っている", Array.isArray(got?.songs));
+  lateListener.close();
+}
 
 // --- 後から参加した画面にも現在の状態が届く ---
 host.emit("host:setSong", 1);

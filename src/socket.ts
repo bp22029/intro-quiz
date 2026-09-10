@@ -17,3 +17,13 @@ export const socket: Socket = io({
   reconnectionDelay: 300,
   reconnectionDelayMax: 2000,
 });
+
+/**
+ * 接続直後にサーバーが1回だけ送る state を、listener を張る前に取りこぼすこと
+ * がある（この socket はモジュール読み込み時に繋ぎに行くので、React が
+ * on("state") を張るより先に接続が完了しうる）。
+ * 各画面はマウント時と接続時にこれを呼んで、必ず1回取り直す。
+ */
+export function syncState() {
+  socket.emit("state:sync");
+}
