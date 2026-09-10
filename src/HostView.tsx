@@ -27,7 +27,7 @@ const EMPTY: State = {
     resumeInMs: 0,
     revealInMs: 0,
   },
-  mode: "manual",
+  mode: "youtube",
   songs: [],
   suspenseMs: 2000,
   masterVolume: 70,
@@ -424,8 +424,9 @@ export default function HostView() {
             tone={playing ? "amber" : "blue"}
             onClick={() => socket.emit(playing ? "host:pause" : "host:play")}
             className="col-span-2"
-            // 未準備のまま押すと「再生中なのに音が出ない」状態になるので止める
-            disabled={!yt.ready}
+            // 未準備のまま押すと「再生中なのに音が出ない」状態になるので止める。
+            // 曲が0件だと ready は真になってしまうので、そこも弾く。
+            disabled={!yt.ready || songs.length === 0}
           >
             {!yt.ready
               ? `動画を準備中… ${yt.readyCount}/${yt.total}`

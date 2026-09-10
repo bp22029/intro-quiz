@@ -21,7 +21,7 @@ const EMPTY: State = {
     resumeInMs: 0,
     revealInMs: 0,
   },
-  mode: "manual",
+  mode: "youtube",
   songs: [],
   suspenseMs: 2000,
   masterVolume: 70,

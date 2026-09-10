@@ -33,7 +33,11 @@ function hasLiveSocket(clientId: string): boolean {
 let index = 0;
 let revealed = false;
 let playing = false;
-let mode: PlayMode = "manual";
+// 既定は YouTube モード。プレイヤーが管理画面に来て、早押しでの自動停止・
+// サビへのジャンプ・お手つき後の再開まで効くようになったので、通常運転はこちら。
+// 手動モードは、埋め込みでは鳴らせないもの（年齢制限つき動画、埋め込み禁止、
+// YouTube 側の仕様変更）に備えた逃げ道として残す。
+let mode: PlayMode = "youtube";
 // 全体音量。曲ごとの volume が未設定ならこの値で鳴る。
 // 100 はプレイヤーの最大値で会場では大きすぎることが多いので、控えめから始める。
 let masterVolume = 70;
