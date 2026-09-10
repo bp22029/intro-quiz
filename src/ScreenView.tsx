@@ -163,7 +163,7 @@ export default function ScreenView() {
           // key に問題番号を入れて、曲が変わるたびにアニメーションをやり直させる
           <div className="text-center" key={`answer-${index}`}>
             <div className="rise rise-1 mb-4 text-3xl tracking-[0.4em] text-neutral-500">
-              こたえ
+              答え
             </div>
             <div className="rise rise-2 break-all text-[8vw] font-black leading-[1.05]">
               {song?.title ?? "-"}
