@@ -9,6 +9,7 @@ import type { State } from "./types";
 import { useCountdown } from "./useCountdown";
 
 const EMPTY: State = {
+  roomCode: "",
   buzzedBy: null,
   lockedIds: [],
   lockedNames: [],

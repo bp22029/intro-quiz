@@ -15,6 +15,7 @@ import type { PlayMode, Song, State } from "./types";
 import { useYouTube, ytErrorMessage } from "./useYouTube";
 
 const EMPTY: State = {
+  roomCode: "",
   buzzedBy: null,
   lockedIds: [],
   lockedNames: [],

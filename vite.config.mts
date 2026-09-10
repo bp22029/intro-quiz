@@ -9,6 +9,8 @@ export default defineConfig({
     proxy: {
       "/socket.io": { target: "http://localhost:3000", ws: true },
       "/qr.png": { target: "http://localhost:3000" },
+      // 部屋の作成・参加URL・oEmbed 中継。これが無いと開発時だけ 404 になる
+      "/api": { target: "http://localhost:3000" },
     },
   },
 });

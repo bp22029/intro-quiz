@@ -17,6 +17,10 @@ export type Round = {
 };
 
 export type State = {
+  // この state を配っている部屋の参加コード。
+  // 参加者にも配る（本人が既に知っている値なので秘密にならない）。
+  // 主催キー(hostKey)は state に載せない。参加者に渡ると答えが見えてしまう。
+  roomCode: string;
   buzzedBy: Player | null; // 現在ボタンを押している人。null なら受付中
   lockedIds: string[]; // このラウンドで誤答した clientId
   lockedNames: string[]; // このラウンドで誤答した名前。別ブラウザでの回避を抑える

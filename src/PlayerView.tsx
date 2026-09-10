@@ -28,6 +28,7 @@ function getClientId(): string {
 const clientId = getClientId();
 
 const EMPTY: State = {
+  roomCode: "",
   buzzedBy: null,
   lockedIds: [],
   lockedNames: [],
