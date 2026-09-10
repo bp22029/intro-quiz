@@ -334,6 +334,15 @@ export default function HostView() {
           クリックすると早押しのビープ音が鳴らせるようになります。
           投影用の画面は、この先の「投影画面を開く」から開けます。
         </p>
+        {/*
+          開演前に必ず通る画面なので、ここに置く。
+          Chrome のプロファイルを取り違えると、事前チェックが全部通っていても
+          本番で Music Premium 限定の曲だけが鳴らない。原因に辿り着きにくい。
+        */}
+        <p className="max-w-md rounded-r2 border border-gold-dim bg-panel px-4 py-3 text-center text-sm leading-relaxed text-gold-bright">
+          このブラウザのGoogleアカウントが、本番で使うものか確認してください。
+          Music Premium 限定の曲は、アカウントが違うと鳴りません。
+        </p>
       </div>
     );
   }
@@ -525,7 +534,7 @@ export default function HostView() {
                   この曲は再生できません（{ytErrorMessage(ytError)}）
                   <div className="mt-1 text-sm text-miss-ink2">
                     {ytError === 101 || ytError === 150
-                      ? "埋め込み禁止・Music Premium 限定・地域や年齢の制限のいずれかです。手動モードへ切り替えるか、別の動画に差し替えてください"
+                      ? "まず、このブラウザのGoogleアカウントが本番で使うものか確認してください（Music Premium 限定の曲は別アカウントだと鳴りません）。それでも駄目なら埋め込み禁止・地域・年齢の制限です。手動モードへ切り替えるか、別の動画に差し替えてください"
                       : "手動モードへ切り替えてください"}
                   </div>
                 </div>

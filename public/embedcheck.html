@@ -32,6 +32,16 @@
         font-size: 14px;
         margin: 0 0 20px;
       }
+      .warn {
+        border: 1px solid #8a7439;
+        background: #1a1408;
+        color: #f4dda2;
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin: 0 0 16px;
+        font-size: 14px;
+        line-height: 1.7;
+      }
       .summary {
         margin: 0 0 16px;
         padding: 12px 16px;
@@ -114,6 +124,14 @@
     <p class="lead">
       <code>songs.json</code> の全曲について、埋め込み設定（oEmbed）と実際の再生可否（本物のプレイヤー）を確認します。
       映像が見えている曲は、そのまま <code>startSec</code> と <code>chorusSec</code> の位置確認にも使えます。
+    </p>
+
+    <p class="warn">
+      <strong>本番で使う Chrome プロファイルで開いてください。</strong>
+      ここの「プレイヤー」欄の結果は、ブラウザにログインしている Google アカウントで変わります。
+      Music Premium 限定の曲は、Premium のアカウントなら鳴り、別のアカウントでは
+      「この動画を視聴できるのは Music Premium のメンバーのみです」で止まります。
+      別プロファイルで確認して当日に別プロファイルで開くと、ここが全部緑でも本番で鳴りません。
     </p>
 
     <div class="summary" id="summary">読み込み中…</div>
