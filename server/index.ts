@@ -5,6 +5,7 @@ import path from "path";
 import QRCode from "qrcode";
 import { Server } from "socket.io";
 import type { JoinAck, PlayMode, Player, Song, State } from "../src/types";
+import { parseYouTubeMeta } from "../src/ytmeta";
 
 // ---------------------------------------------------------------------------
 // 状態（すべてプロセスメモリ。永続化しない。単一インスタンス前提）
@@ -192,6 +193,53 @@ app.get("/qr.png", async (req, res) => {
 });
 
 /** 投影画面が URL テキストを出すために使う */
+/**
+ * YouTube の oEmbed を中継して、曲名とアーティスト名の下書きを返す。
+ * ブラウザから直接叩かずサーバーを通すのは、CORS の可否に依存させないため。
+ * 401 は「埋め込み禁止」の意味なので、そのまま編集画面へ伝える。
+ */
+app.get("/api/oembed", async (req, res) => {
+  const id = String(req.query.v ?? "").trim();
+  if (!/^[A-Za-z0-9_-]{5,40}$/.test(id)) {
+    res.status(400).json({ ok: false, error: "動画IDが不正です" });
+    return;
+  }
+
+  const target =
+    "https://www.youtube.com/oembed?url=" +
+    encodeURIComponent("https://www.youtube.com/watch?v=" + id) +
+    "&format=json";
+
+  try {
+    const r = await fetch(target);
+    if (r.status === 401) {
+      res.json({ ok: false, error: "この動画は埋め込みが禁止されています" });
+      return;
+    }
+    if (r.status === 404) {
+      res.json({ ok: false, error: "動画が見つかりません（IDの誤り・非公開）" });
+      return;
+    }
+    if (!r.ok) {
+      res.json({ ok: false, error: `取得に失敗しました（${r.status}）` });
+      return;
+    }
+    const j = (await r.json()) as { title?: unknown; author_name?: unknown };
+    const meta = parseYouTubeMeta(
+      String(j.title ?? ""),
+      String(j.author_name ?? ""),
+    );
+    res.json({
+      ok: true,
+      title: meta.title,
+      artist: meta.artist,
+      channel: String(j.author_name ?? ""),
+    });
+  } catch {
+    res.json({ ok: false, error: "YouTube へ接続できませんでした" });
+  }
+});
+
 app.get("/api/url", (req, res) => {
   res.json({ url: publicUrl(req) });
 });

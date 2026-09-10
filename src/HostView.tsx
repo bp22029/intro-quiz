@@ -823,8 +823,48 @@ function SongEditor({
   onApply: () => void;
   onCancel: () => void;
 }) {
+  // 行ごとの取得状態。"…取得中" と失敗理由を出すために持つ。
+  const [meta, setMeta] = useState<Record<number, string>>({});
+
   const update = (i: number, patch: Partial<Song>) =>
     setDraft(draft.map((s, k) => (k === i ? { ...s, ...patch } : s)));
+
+  /**
+   * 動画IDから曲名とアーティストを取り込む。
+   * force=false のときは、空欄だけを埋める（貼り付け直後の自動補完用）。
+   * 取れるのは下書きなので、司会が直す前提。
+   */
+  const fetchMeta = async (i: number, videoId: string, force: boolean) => {
+    if (!/^[A-Za-z0-9_-]{5,40}$/.test(videoId)) return;
+    setMeta((m) => ({ ...m, [i]: "取得中…" }));
+    try {
+      const r = await fetch(`/api/oembed?v=${encodeURIComponent(videoId)}`);
+      const j = (await r.json()) as {
+        ok: boolean;
+        title?: string;
+        artist?: string;
+        channel?: string;
+        error?: string;
+      };
+      if (!j.ok) {
+        setMeta((m) => ({ ...m, [i]: j.error ?? "取得できませんでした" }));
+        return;
+      }
+      setDraft(
+        draft.map((s, k) => {
+          if (k !== i) return s;
+          return {
+            ...s,
+            title: force || !s.title ? (j.title ?? s.title) : s.title,
+            artist: force || !s.artist ? (j.artist ?? s.artist) : s.artist,
+          };
+        }),
+      );
+      setMeta((m) => ({ ...m, [i]: `${j.channel ?? ""} から取り込みました` }));
+    } catch {
+      setMeta((m) => ({ ...m, [i]: "取得できませんでした" }));
+    }
+  };
 
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir;
@@ -874,8 +914,24 @@ function SongEditor({
             onChange={(v) => {
               const { videoId, t } = parseYouTube(v);
               update(i, t !== null ? { videoId, chorusSec: t } : { videoId });
+              // 曲名もアーティストも空なら、貼った直後に埋めてしまう。
+              // 入力済みの内容は勝手に上書きしない。
+              if (!s.title && !s.artist) void fetchMeta(i, videoId, false);
             }}
           />
+          <div className="mt-1 flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.currentTarget.blur();
+                void fetchMeta(i, s.videoId, true);
+              }}
+              disabled={!s.videoId}
+              className="rounded-lg border border-neutral-600 px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-800 disabled:border-neutral-800 disabled:text-neutral-600"
+            >
+              YouTubeから曲名を取得
+            </button>
+            <span className="text-xs text-neutral-500">{meta[i] ?? ""}</span>
+          </div>
           <div className="flex gap-2">
             <Field
               label="イントロ開始秒"
