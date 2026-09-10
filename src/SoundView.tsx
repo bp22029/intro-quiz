@@ -7,7 +7,6 @@
 //
 // 手元PCで /host の隣に並べて置く想定。表示専用で、操作は一切受け付けない。
 import { useEffect, useRef, useState } from "react";
-import { unlockAudio } from "./beep";
 import { socket } from "./socket";
 import type { State } from "./types";
 import { useYouTube, ytErrorMessage } from "./useYouTube";
@@ -33,7 +32,6 @@ const EMPTY: State = {
 
 export default function SoundView() {
   const [state, setState] = useState<State>(EMPTY);
-  const [armed, setArmed] = useState(false); // 「再生を開始する」クリック済みか
   const [connected, setConnected] = useState(socket.connected);
 
   const { index, revealed, playing } = state.round;
@@ -62,22 +60,23 @@ export default function SoundView() {
     };
   }, []);
 
-  // プレイヤーの準備状況を管理画面へ知らせる（未準備のまま再生させないため）
+  // プレイヤーの準備状況を管理画面へ知らせる。
+  // 解錠(primed)まで済んで初めて「再生できる」ので、ready に含める。
   useEffect(() => {
     socket.emit("sound:yt", {
-      ready: yt.ready,
+      ready: yt.ready && yt.primed,
       readyCount: yt.readyCount,
       total: yt.total,
     });
-  }, [yt.ready, yt.readyCount, yt.total]);
+  }, [yt.ready, yt.primed, yt.readyCount, yt.total]);
 
   // 準備が整う前に再生を要求されていた場合、整った時点で鳴らし直す。
   // これがないと「管理画面は再生中なのに音が出ない」状態のままになる。
   useEffect(() => {
-    if (mode === "youtube" && playing && yt.ready && !revealed) {
+    if (mode === "youtube" && playing && yt.ready && yt.primed && !revealed) {
       yt.play(index);
     }
-  }, [yt.ready, mode, playing, revealed, index, yt]);
+  }, [yt.ready, yt.primed, mode, playing, revealed, index, yt]);
 
   // --- サーバー状態に合わせて YouTube プレイヤーを追従させる ---
   const prev = useRef({ index: -1, revealed: false, playing: false });
@@ -107,30 +106,6 @@ export default function SoundView() {
 
   const currentError: number | undefined = yt.errors[index];
 
-  // 音を出すには1クリックが必要（ブラウザの制約）。
-  // このクリックでこの窓に操作許可が固定されるので、以後は背面に回しても鳴る。
-  if (!armed) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-6 bg-neutral-950 p-8">
-        <h1 className="text-4xl font-black">再生窓</h1>
-        <button
-          className="rounded-2xl bg-red-600 px-12 py-6 text-3xl font-bold hover:bg-red-500"
-          onClick={async (e) => {
-            e.currentTarget.blur();
-            await unlockAudio();
-            setArmed(true);
-          }}
-        >
-          再生を開始する
-        </button>
-        <p className="max-w-md text-center text-neutral-400">
-          この窓が曲を鳴らします。管理画面の隣に置いてください。
-          クリックすると、背面に回しても再生できるようになります（ブラウザの制約）。
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full flex-col bg-neutral-950 p-4">
       <div className="flex items-center justify-between pb-3 text-sm">
@@ -139,7 +114,7 @@ export default function SoundView() {
         </span>
         <span className="text-neutral-500">
           {mode === "youtube"
-            ? yt.ready
+            ? yt.primed
               ? `第 ${index + 1} 問 / 全曲 準備完了`
               : `準備中 ${yt.readyCount} / ${yt.total} 曲`
             : "手動モード（この窓は鳴りません）"}
@@ -158,7 +133,9 @@ export default function SoundView() {
       ) : (
         <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl bg-black">
           {/* 現在の曲だけを画面内に置き、他は画面外へ逃がす。
-              映像は隠さない（埋め込みプレーヤーは可視であることが求められる）。 */}
+              映像は隠さない（埋め込みプレーヤーは可視であることが求められる）。
+              解錠の前からプレイヤーを作っておく必要があるので、
+              このブロックは常に描く。 */}
           {songs.map((_, i) => (
             <div
               key={i}
@@ -170,6 +147,35 @@ export default function SoundView() {
               <div className="h-full w-full" ref={yt.registerRef(i)} />
             </div>
           ))}
+
+          {/*
+            解錠されるまで覆う。クロスオリジンの iframe は、親ページでクリック
+            しても自動再生の許可を引き継がない。各プレイヤーを一度ユーザー操作の
+            中で鳴らしておかないと、この窓を背面に置いたとき最初の1回が鳴らない。
+          */}
+          {!yt.primed && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 bg-neutral-950/95 p-8 text-center">
+              <h1 className="text-3xl font-black">再生窓</h1>
+              <button
+                disabled={!yt.ready}
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  // クリックの中から同期的に呼ぶ。await を挟むと許可が切れる。
+                  yt.primeAll();
+                }}
+                className="rounded-2xl bg-red-600 px-12 py-6 text-3xl font-bold hover:bg-red-500 disabled:bg-neutral-700 disabled:text-neutral-500"
+              >
+                {yt.ready
+                  ? "再生を有効にする"
+                  : `動画を準備中… ${yt.readyCount} / ${yt.total}`}
+              </button>
+              <p className="max-w-md text-neutral-400">
+                この窓が曲を鳴らします。管理画面の隣に置いてください。
+                クリックすると全曲を一瞬だけ無音で鳴らして解錠します。
+                これをしないと、窓を背面に置いたとき最初の1曲が鳴りません。
+              </p>
+            </div>
+          )}
 
           {currentError !== undefined && (
             <div className="absolute inset-x-6 bottom-6 rounded-xl border-2 border-red-500 bg-red-950/95 px-5 py-4 text-center text-xl text-red-200">

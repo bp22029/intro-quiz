@@ -31,10 +31,9 @@ export default function ScreenView() {
   const [state, setState] = useState<State>(EMPTY);
   const [url, setUrl] = useState<string>(window.location.origin);
   const [ready, setReady] = useState(false); // 「準備」クリック済みか
-  const [elapsed, setElapsed] = useState(0);
 
-  const { index, revealed, playing, wrongName, resumeInMs, revealInMs } =
-    state.round;
+  // playing は投影画面では使わない（曲は再生窓が鳴らし、秒数表示も廃止した）
+  const { index, revealed, wrongName, resumeInMs, revealInMs } = state.round;
   const songs = state.songs;
   const song = songs[index];
 
@@ -60,17 +59,6 @@ export default function ScreenView() {
       socket.off("connect", onConnect);
     };
   }, []);
-
-  // --- 経過秒数 ---
-  useEffect(() => {
-    if (!playing) {
-      setElapsed(0);
-      return;
-    }
-    setElapsed(0);
-    const t = setInterval(() => setElapsed((e) => e + 1), 1000);
-    return () => clearInterval(t);
-  }, [playing, index]);
 
   const buzzed = state.buzzedBy;
   const countdown = useCountdown(resumeInMs);
@@ -196,14 +184,10 @@ export default function ScreenView() {
               {buzzed.name}
             </div>
           </div>
-        ) : playing ? (
-          <div className="text-center">
-            <div className="text-[18vw] font-black leading-none tabular-nums">
-              {elapsed}
-            </div>
-            <div className="text-5xl text-neutral-500">秒</div>
-          </div>
         ) : (
+          // 回答者も答えも出ていない間は、問題番号を出し続ける。
+          // 経過秒数を出していたが、何の時間か伝わらず、
+          // お手つき後の再開で0へ戻るのも意味を持たないので廃止した。
           <div className="text-center">
             <div className="text-[15vw] font-black leading-none">第 {index + 1} 問</div>
           </div>

@@ -33,6 +33,9 @@ let index = 0;
 let revealed = false;
 let playing = false;
 let mode: PlayMode = "manual";
+// 早押しで止める直前に鳴っていたか。お手つきの3秒カウントダウン後、
+// 曲を止めた場所から鳴らし直すために覚えておく。
+let playingBeforeBuzz = false;
 
 // 曲リスト。管理画面から編集できるようにメモリで保持する。
 // DBを持たない方針なので、プロセスが再起動すると songs.json の内容に戻る。
@@ -293,6 +296,7 @@ io.on("connection", (socket) => {
     if (lockedNames.has(player.name)) return; // 同じ名前で誤答済み
 
     buzzedBy = player;
+    playingBeforeBuzz = playing; // 受付再開時に戻せるよう、止める前の状態を控える
     playing = false; // 押されたら再生は止まる
     console.log(`[buzz] ${player.name}`);
     io.emit("buzzed", player);
@@ -324,7 +328,11 @@ io.on("connection", (socket) => {
       wrongName = null;
       resumeAt = 0;
       resumeTimer = null;
-      console.log("[host] 受付再開");
+      // 「3 → 2 → 1 → GO!」は曲もここから再開するという約束なので、
+      // 押される直前に鳴っていたなら鳴らし直す。止めた位置から続く。
+      if (playingBeforeBuzz) playing = true;
+      playingBeforeBuzz = false;
+      console.log(`[host] 受付再開${playing ? "・再生再開" : ""}`);
       broadcastState();
     }, WRONG_COUNTDOWN_MS);
 
@@ -342,6 +350,7 @@ io.on("connection", (socket) => {
     lockedNames.clear();
     revealed = false;
     playing = false;
+    playingBeforeBuzz = false;
     console.log("[host] nextRound");
     broadcastState();
   });
@@ -355,6 +364,7 @@ io.on("connection", (socket) => {
     index = n;
     revealed = false;
     playing = false;
+    playingBeforeBuzz = false;
     buzzedBy = null;
     lockedIds.clear();
     lockedNames.clear();

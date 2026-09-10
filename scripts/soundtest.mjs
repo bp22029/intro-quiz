@@ -109,6 +109,55 @@ check(
   hostState.state?.ytStatus?.connected === false,
 );
 
+// --- お手つき後、カウントダウンが終わったら曲が再開する ---
+// 「3 → 2 → 1 → GO!」は曲もここから再開するという約束なので、
+// 司会が毎回「▶ イントロ再生」を押し直さなくてよいことを確かめる。
+const sound2 = connect();
+sound2.emit("role:sound");
+await wait(D);
+host.emit("host:setMode", "youtube");
+host.emit("host:setSong", 0);
+await wait(D);
+sound2.emit("sound:yt", { ready: true, readyCount: total, total });
+await wait(D);
+
+host.emit("host:play");
+await wait(D);
+check("再生中になる", hostState.state?.round?.playing === true);
+
+player.emit("buzz");
+await wait(D);
+check("早押しで再生が止まる", hostState.state?.round?.playing === false);
+check("押した人が記録される", hostState.state?.buzzedBy?.name === "そら");
+
+host.emit("host:wrong");
+await wait(D);
+check("お手つき演出中は再生しない", hostState.state?.round?.playing === false);
+check("不正解が出ている", hostState.state?.round?.wrongName === "そら");
+
+await wait(3000 + D * 2); // WRONG_COUNTDOWN_MS ぶん待つ
+check("カウントダウン後に曲が再開する", hostState.state?.round?.playing === true);
+check("不正解表示は消えている", hostState.state?.round?.wrongName === null);
+
+// --- 鳴っていなかったなら、勝手に鳴り出さない ---
+host.emit("host:setSong", 0); // 状態を戻す（playing=false になる）
+await wait(D);
+check("問題を選び直すと停止する", hostState.state?.round?.playing === false);
+
+player.emit("buzz");
+await wait(D);
+host.emit("host:wrong");
+await wait(3000 + D * 2);
+check(
+  "止まっていた曲は再開しない",
+  hostState.state?.round?.playing === false,
+);
+
+host.emit("host:setMode", "manual");
+host.emit("host:setSong", 0);
+await wait(D);
+sound2.close();
+
 host.close();
 player.close();
 

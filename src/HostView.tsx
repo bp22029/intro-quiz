@@ -240,7 +240,7 @@ export default function HostView() {
           <div className="mt-1 text-sm text-amber-200">
             YouTubeモードは再生窓が鳴らします。別ウィンドウで{" "}
             <code className="rounded bg-black/40 px-1.5 py-0.5">/sound</code>{" "}
-            を開き、「再生を開始する」をクリックしてください。
+            を開き、「再生を有効にする」をクリックしてください。
           </div>
           <button
             onClick={(e) => {
