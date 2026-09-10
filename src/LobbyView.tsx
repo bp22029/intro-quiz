@@ -48,13 +48,37 @@ export default function LobbyView() {
     <div className="mx-auto flex h-full max-w-md flex-col justify-center gap-8 p-8">
       <h1 className="text-3xl font-bold">イントロクイズ</h1>
 
+      {/*
+        出題する側を主にする。参加者は QR か配られたURLから直接部屋へ入るので、
+        この画面に来る参加者は「QRが読めなかった人」だけになる。
+        主催者はここからしか始められない。
+      */}
       <div className="flex flex-col gap-3">
+        <p className="text-neutral-400">出題する</p>
+        <button
+          className="rounded-xl bg-red-600 px-5 py-5 text-2xl font-bold active:bg-red-700 disabled:opacity-50"
+          onClick={createRoom}
+          disabled={creating}
+        >
+          {creating ? "作成中…" : "新しい部屋を作る"}
+        </button>
+        <p className="text-sm text-neutral-500">
+          作ると管理画面のURLが発行されます。ログインが無いので、
+          <strong className="text-neutral-300">
+            そのURLを控えておかないと部屋に戻れません
+          </strong>
+          。
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-neutral-800 pt-8">
         <p className="text-neutral-400">参加する</p>
         <input
-          className="rounded-xl bg-neutral-800 px-5 py-5 text-center text-3xl tracking-[0.3em] outline-none focus:ring-2 focus:ring-red-500"
+          // autoFocus は付けない。スマホでキーボードが開いて、
+          // 主となる「新しい部屋を作る」が画面外へ押し出されてしまう。
+          className="rounded-xl bg-neutral-800 px-5 py-4 text-center text-3xl tracking-[0.3em] outline-none focus:ring-2 focus:ring-red-500"
           value={code}
           maxLength={8}
-          autoFocus
           inputMode="text"
           autoCapitalize="characters"
           autoComplete="off"
@@ -65,31 +89,13 @@ export default function LobbyView() {
           }}
         />
         <button
-          className="rounded-xl bg-red-600 px-5 py-5 text-2xl font-bold active:bg-red-700"
+          className="rounded-xl bg-neutral-800 px-5 py-4 text-xl font-bold active:bg-neutral-700"
           onClick={join}
         >
           参加する
         </button>
         <p className="text-sm text-neutral-500">
-          主催者から渡されたコード、またはQRから入ってください
-        </p>
-      </div>
-
-      <div className="border-t border-neutral-800 pt-8">
-        <p className="pb-3 text-neutral-400">出題する</p>
-        <button
-          className="w-full rounded-xl bg-neutral-800 px-5 py-5 text-xl font-bold active:bg-neutral-700 disabled:opacity-50"
-          onClick={createRoom}
-          disabled={creating}
-        >
-          {creating ? "作成中…" : "新しい部屋を作る"}
-        </button>
-        <p className="pt-3 text-sm text-neutral-500">
-          作ると管理画面のURLが発行されます。ログインが無いので、
-          <strong className="text-neutral-300">
-            そのURLを控えておかないと部屋に戻れません
-          </strong>
-          。
+          ふつうはQRから入ります。QRが読めないときだけ、主催者が読み上げるコードを入れてください
         </p>
       </div>
 
