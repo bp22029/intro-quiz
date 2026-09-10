@@ -157,11 +157,15 @@ function connectRaw(auth) {
 
 const ghostCode = await connectRaw({ room: "ZZZZ" });
 const ghostKey = await connectRaw({ hostKey: "no-such-host-key-000" });
+// 部屋を名乗らない接続。既定の部屋は無いので、ここも見つからない扱いになる。
+const ghostBare = await connectRaw({});
 await wait(D);
 check("存在しない参加コードで room:missing が来る", ghostCode.missing === true);
 check("存在しない参加コードでは state が来ない", ghostCode.gotState === false);
 check("存在しない主催キーで room:missing が来る", ghostKey.missing === true);
 check("存在しない主催キーでは state が来ない", ghostKey.gotState === false);
+check("部屋を名乗らない接続も room:missing になる", ghostBare.missing === true);
+check("部屋を名乗らない接続に state は来ない", ghostBare.gotState === false);
 
 // 部屋の無い相手が何を送っても、どの部屋も動かない
 const beforeGhost = JSON.stringify(hostA.lastState);
@@ -190,7 +194,7 @@ const urlLower = await fetch(`${URL}/api/url?room=${A.code.toLowerCase()}`);
 check("参加コードは大文字小文字を問わない", urlLower.status === 200);
 
 console.log(fail.length ? `\n${fail.length} 件 FAIL` : "\nすべて PASS");
-[hostA, hostB, hostC, a1, a2, b1, fakeHost, crossed, ghostCode, ghostKey].forEach(
+[hostA, hostB, hostC, a1, a2, b1, fakeHost, crossed, ghostCode, ghostKey, ghostBare].forEach(
   (s) => s.close(),
 );
 process.exit(fail.length ? 1 : 0);

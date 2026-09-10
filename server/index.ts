@@ -33,8 +33,6 @@ type Room = {
   createdAt: number;
   /** 最後に何か起きた時刻。誰も居ない部屋をいつ捨てるかの判断に使う */
   lastActiveAt: number;
-  /** 掃除の対象外にするか。後方互換の既定部屋にだけ立てる */
-  persistent: boolean;
 
   /** この部屋に繋がっているソケット。同報と「空か」の判定に使う */
   sockets: Set<Socket>;
@@ -96,8 +94,8 @@ const MAX_SONGS = 50;
 const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 100;
 /** 誰も居なくなった部屋を捨てるまでの時間。既定2時間 */
 const ROOM_TTL_MS = Number(process.env.ROOM_TTL_MS) || 2 * 60 * 60 * 1000;
-/** 掃除の間隔 */
-const SWEEP_INTERVAL_MS = 60 * 1000;
+/** 掃除の間隔。短くできるのは検証用（scripts/sweeptest.mjs） */
+const SWEEP_INTERVAL_MS = Number(process.env.SWEEP_INTERVAL_MS) || 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // 曲リストの初期値
@@ -198,18 +196,15 @@ function newHostKey(): string {
   return crypto.randomBytes(12).toString("base64url"); // 16文字
 }
 
-function createRoom(
-  opts: { code?: string; persistent?: boolean } = {},
-): Room | null {
-  const code = opts.code ?? newRoomCode();
-  if (!code || rooms.has(code)) return null;
+function createRoom(): Room | null {
+  const code = newRoomCode();
+  if (!code) return null;
   const now = Date.now();
   const room: Room = {
     code,
     hostKey: newHostKey(),
     createdAt: now,
     lastActiveAt: now,
-    persistent: opts.persistent === true,
     sockets: new Set(),
     socketToClient: new Map(),
     players: new Map(),
@@ -254,7 +249,6 @@ function sweepRooms(): number {
   const now = Date.now();
   let removed = 0;
   for (const room of [...rooms.values()]) {
-    if (room.persistent) continue;
     if (room.sockets.size > 0) continue;
     if (now - room.lastActiveAt < ROOM_TTL_MS) continue;
     destroyRoom(room);
@@ -484,16 +478,13 @@ app.get("*", (_req, res) => res.sendFile(path.join(distDir, "index.html")));
 // Socket.IO
 // ---------------------------------------------------------------------------
 
-/**
- * 後方互換の既定部屋。ハンドシェイクで部屋を名乗らない接続はここへ入る。
- * 部屋つきURL へ全部移した段階で捨てる。
- */
-const defaultRoom = createRoom({ code: "MAIN", persistent: true });
-if (!defaultRoom) throw new Error("既定部屋を作れませんでした");
-
 io.on("connection", (socket) => {
-  // どの部屋の誰として繋ぐかは、ハンドシェイクで決める。
+  // どの部屋の誰として繋ぐかは、ハンドシェイクで1度だけ決める。
   // 参加者は部屋コード、主催者は hostKey。あとから名乗り直すことはできない。
+  //
+  // かつては接続後に "role:host" と名乗るだけで曲データが届いていた。
+  // 部屋のURLを配って使う形になった以上、それでは参加コードを知っている人が
+  // 同じ名乗りをするだけで答えを覗ける。権限はここで閉じる。
   const auth = (socket.handshake.auth ?? {}) as Record<string, unknown>;
   const hostKey = typeof auth.hostKey === "string" ? auth.hostKey : "";
   const wantCode = normalizeCode(auth.room);
@@ -506,8 +497,6 @@ io.on("connection", (socket) => {
     privileged = found !== null; // 曲データを受け取れるのは主催キーを持つ側だけ
   } else if (wantCode) {
     found = rooms.get(wantCode) ?? null;
-  } else {
-    found = defaultRoom; // 後方互換
   }
 
   if (!found) {
@@ -530,18 +519,12 @@ io.on("connection", (socket) => {
   socket.emit("state", stateFor(socket, R));
 
   /**
-   * 投影画面・管理画面が自分の役割を申告する。
-   * 後方互換のため残している（既定部屋ではこれで曲データが届く）。
-   * 部屋つきURL では特権はハンドシェイクの hostKey だけで決まる。
+   * 古いクライアントが送ってくる役割の申告。state を送り直すだけで、
+   * 権限は一切与えない。権限はハンドシェイクの hostKey だけで決まる。
    */
-  socket.on("role:screen", () => {
-    if (R === defaultRoom) socket.data.privileged = true;
-    socket.emit("state", stateFor(socket, R));
-  });
-  socket.on("role:host", () => {
-    if (R === defaultRoom) socket.data.privileged = true;
-    socket.emit("state", stateFor(socket, R));
-  });
+  const resend = () => socket.emit("state", stateFor(socket, R));
+  socket.on("role:screen", resend);
+  socket.on("role:host", resend);
 
   socket.on("join", (payload: unknown, ack?: (r: JoinAck) => void) => {
     // 参加者は { name, clientId } を送る。テスト用に文字列だけの形も受ける。
