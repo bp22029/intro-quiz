@@ -88,6 +88,8 @@ npm start        # http://localhost:3000 で3画面すべてを配信
 
 `public/songs.sample.json` をコピーして `public/songs.json` を作ります。**`public/songs.json` は `.gitignore` 済みです**（参加者の実名が入るため、コミットされない運用にしています）。
 
+`songs.sample.json` にはデモ用の3曲が入っています。`songs.json` を作らずに起動すると、この3曲で動きます。まず動かして雰囲気を掴んでから、自分の曲に差し替えてください。
+
 ```json
 [
   {

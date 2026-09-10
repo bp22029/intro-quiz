@@ -1,26 +1,26 @@
 [
   {
-    "videoId": "dQw4w9WgXcQ",
-    "title": "サンプル曲1",
-    "artist": "サンプルアーティスト",
-    "owner": "推した人の名前",
+    "videoId": "j7CDb610Bg0",
+    "title": "天体観測",
+    "artist": "BUMP OF CHICKEN",
+    "owner": "",
     "startSec": 0,
-    "chorusSec": 43
+    "chorusSec": 68
   },
   {
-    "videoId": "dQw4w9WgXcQ",
-    "title": "サンプル曲2",
-    "artist": "サンプルアーティスト",
-    "owner": "推した人の名前",
-    "startSec": 12,
-    "chorusSec": 60
+    "videoId": "xGbxsiBZGPI",
+    "title": "完全感覚Dreamer",
+    "artist": "ONE OK ROCK",
+    "owner": "",
+    "startSec": 0,
+    "chorusSec": 72
   },
   {
-    "videoId": "dQw4w9WgXcQ",
-    "title": "サンプル曲3",
-    "artist": "サンプルアーティスト",
-    "owner": "推した人の名前",
+    "videoId": "cr8magEp0Ho",
+    "title": "リライト",
+    "artist": "ASIAN KUNG-FU GENERATION",
+    "owner": "",
     "startSec": 0,
-    "chorusSec": 88
+    "chorusSec": 74
   }
 ]
