@@ -184,6 +184,12 @@ export function useYouTube(
               rel: 0,
               modestbranding: 1,
               playsinline: 1,
+              // 字幕とアノテーションを出さない。歌詞の字幕が出ると答えが見えるうえ、
+              // 小さい枠では画面の半分を覆ってしまう。
+              // なお視聴者のアカウントが「字幕を常に表示」になっている場合は、
+              // ここでは抑えきれない（YouTube 側の設定が優先される）。
+              cc_load_policy: 0,
+              iv_load_policy: 3,
             },
             events: {
               onReady: (event: any) => {
@@ -396,7 +402,11 @@ export function useYouTube(
 /** エラーコードを日本語文言にする。101 と 150 は「埋め込み再生が禁止されています」 */
 export function ytErrorMessage(code: number): string {
   if (code === 101 || code === 150) {
-    return "埋め込み再生が禁止されています";
+    // 埋め込み設定が禁止のときだけでなく、Music Premium 限定・地域制限・
+    // 年齢制限でも同じコードが返る。oEmbed は埋め込み設定しか見ないので、
+    // 事前チェックが 200 でもここで落ちることがある。
+    // 「埋め込み禁止」と言い切ると原因を探す先を誤らせるので、断定しない。
+    return "この環境では再生できません";
   }
 
   switch (code) {

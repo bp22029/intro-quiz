@@ -524,7 +524,9 @@ export default function HostView() {
                 <div className="absolute inset-x-4 bottom-4 rounded-r2 border-2 border-miss-border bg-miss-deep/95 px-4 py-3 text-center text-miss-ink">
                   この曲は再生できません（{ytErrorMessage(ytError)}）
                   <div className="mt-1 text-sm text-miss-ink2">
-                    手動モードへ切り替えてください
+                    {ytError === 101 || ytError === 150
+                      ? "埋め込み禁止・Music Premium 限定・地域や年齢の制限のいずれかです。手動モードへ切り替えるか、別の動画に差し替えてください"
+                      : "手動モードへ切り替えてください"}
                   </div>
                 </div>
               )}
