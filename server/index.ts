@@ -362,7 +362,7 @@ function publicUrl(req: express.Request): string {
 
 /** 参加者が開くURL。QR にもこれを載せる */
 function joinUrl(req: express.Request, code: string): string {
-  return `${publicUrl(req)}/r/${code}`;
+  return `${publicUrl(req)}/join/${code}`;
 }
 
 /**

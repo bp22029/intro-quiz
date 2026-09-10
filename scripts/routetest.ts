@@ -31,13 +31,13 @@ eq("空文字もロビー", parseRoomRef(""), { kind: "lobby" });
 eq("キーの無い /host はロビー", parseRoomRef("/host"), { kind: "lobby" });
 eq("キーの無い /screen はロビー", parseRoomRef("/screen"), { kind: "lobby" });
 eq("知らないパスはロビー", parseRoomRef("/foo/bar"), { kind: "lobby" });
-eq("コードの無い /r はロビー", parseRoomRef("/r"), { kind: "lobby" });
-eq("空のコードはロビー", parseRoomRef("/r/---"), { kind: "lobby" });
+eq("コードの無い /join はロビー", parseRoomRef("/join"), { kind: "lobby" });
+eq("空のコードはロビー", parseRoomRef("/join/---"), { kind: "lobby" });
 
 // --- 参加者 ---
-eq("参加者URL", parseRoomRef("/r/ABCD"), { kind: "player", code: "ABCD" });
-eq("小文字でも同じ部屋", parseRoomRef("/r/abcd"), { kind: "player", code: "ABCD" });
-eq("末尾スラッシュ", parseRoomRef("/r/ABCD/"), { kind: "player", code: "ABCD" });
+eq("参加者URL", parseRoomRef("/join/ABCD"), { kind: "player", code: "ABCD" });
+eq("小文字でも同じ部屋", parseRoomRef("/join/abcd"), { kind: "player", code: "ABCD" });
+eq("末尾スラッシュ", parseRoomRef("/join/ABCD/"), { kind: "player", code: "ABCD" });
 
 // --- 投影・管理 ---
 const KEY = "TrEWSc19p7sANLET";

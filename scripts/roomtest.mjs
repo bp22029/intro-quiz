@@ -29,7 +29,7 @@ check("参加コードが部屋ごとに違う", A.code !== B.code);
 check("主催キーが部屋ごとに違う", A.hostKey !== B.hostKey);
 check("参加コードは短くて読める形", /^[A-Z0-9]{4}$/.test(A.code));
 check("主催キーは推測できない長さ", A.hostKey.length >= 16);
-check("参加URLに参加コードが入る", A.joinUrl.endsWith(`/r/${A.code}`));
+check("参加URLに参加コードが入る", A.joinUrl.endsWith(`/join/${A.code}`));
 
 const hostA = await connectHost(URL, A.hostKey);
 const hostB = await connectHost(URL, B.hostKey);
@@ -186,8 +186,8 @@ check("存在する部屋の QR は出る", qrOk.status === 200);
 check("存在しない部屋の QR は 404", qrNg.status === 404);
 check("存在しない部屋の参加URLは 404", urlNg.status === 404);
 check(
-  "参加URLは /r/<コード> を指す",
-  (await urlOk.json()).url.endsWith(`/r/${A.code}`),
+  "参加URLは /join/<コード> を指す",
+  (await urlOk.json()).url.endsWith(`/join/${A.code}`),
 );
 // 小文字で渡しても同じ部屋として扱う（口頭で伝えたコードの打ち間違い対策）
 const urlLower = await fetch(`${URL}/api/url?room=${A.code.toLowerCase()}`);

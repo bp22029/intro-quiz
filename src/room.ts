@@ -2,7 +2,7 @@
 // ルーティングライブラリは入れない方針なので、pathname を素直に見るだけにする。
 //
 //   /                      ロビー（部屋を作る・コードを入れて参加する）
-//   /r/<参加コード>         参加者（スマホ）
+//   /join/<参加コード>      参加者（スマホ）
 //   /screen/<主催キー>      投影画面（表示専用）
 //   /host/<主催キー>        管理画面（進行操作・YouTube再生）
 //
@@ -33,7 +33,7 @@ function isHostKey(raw: string): boolean {
 export function parseRoomRef(pathname: string): RoomRef {
   const seg = pathname.split("/").filter((s) => s.length > 0);
 
-  if (seg[0] === "r" && seg[1]) {
+  if (seg[0] === "join" && seg[1]) {
     const code = normalizeCode(decodeURIComponent(seg[1]));
     if (code) return { kind: "player", code };
   }
@@ -70,6 +70,6 @@ export function handshakeAuth(ref: RoomRef): Record<string, string> | null {
   }
 }
 
-export const playerPath = (code: string) => `/r/${code}`;
+export const playerPath = (code: string) => `/join/${code}`;
 export const hostPath = (hostKey: string) => `/host/${hostKey}`;
 export const screenPath = (hostKey: string) => `/screen/${hostKey}`;
