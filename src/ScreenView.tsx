@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { beep, playBuzz, preloadSfx, unlockAudio } from "./beep";
 import { RoomMissing, useRoomMissing } from "./RoomMissing";
 import { socket, syncState } from "./socket";
+import { fitVw } from "./textfit";
 import type { State } from "./types";
 import { useCountdown } from "./useCountdown";
 
@@ -125,6 +126,12 @@ export default function ScreenView() {
     );
   }
 
+  // 大きい文字は枠に収まるまで縮める。日本語は単語の途中で改行されるので、
+  // 折り返し位置を制御するより1行に収めるほうが確実（src/textfit.ts）。
+  const titleFit = fitVw(song?.title ?? "", 7.8);
+  const artistFit = fitVw(song?.artist ?? "", 3);
+  const buzzedFit = fitVw(buzzed?.name ?? "", 11.7);
+
   const shown = state.players.slice(0, MAX_CHIPS);
   const folded = state.players.length - shown.length;
 
@@ -228,11 +235,6 @@ export default function ScreenView() {
             <div className="text-[10.3vw] font-black leading-none tracking-[0.06em] text-gold-bright">
               正解は…
             </div>
-            <div className="flex gap-3 pt-[4vw]">
-              <div className="h-[0.45vw] w-[4vw] rounded-full bg-gold" />
-              <div className="h-[0.45vw] w-[4vw] rounded-full bg-gold opacity-45" />
-              <div className="h-[0.45vw] w-[4vw] rounded-full bg-gold opacity-[0.15]" />
-            </div>
           </div>
         ) : showWrong ? (
           <div className="flex flex-col items-center">
@@ -260,10 +262,20 @@ export default function ScreenView() {
               </div>
               <div className="h-px w-[6.9vw] bg-gold opacity-60" />
             </div>
-            <div className="rise rise-2 text-balance text-center text-[7.8vw] font-black leading-[1.06] tracking-[0.02em]">
+            <div
+              className={`rise rise-2 text-balance text-center font-black leading-[1.06] tracking-[0.02em] ${
+                titleFit.nowrap ? "whitespace-nowrap" : ""
+              }`}
+              style={{ fontSize: `${titleFit.sizeVw}vw` }}
+            >
               {song?.title ?? "-"}
             </div>
-            <div className="rise rise-3 pt-[1.2vw] text-[3vw] font-medium leading-tight text-ink-2">
+            <div
+              className={`rise rise-3 pt-[1.2vw] font-medium leading-tight text-ink-2 ${
+                artistFit.nowrap ? "whitespace-nowrap" : ""
+              }`}
+              style={{ fontSize: `${artistFit.sizeVw}vw` }}
+            >
               {song?.artist ?? ""}
             </div>
             <div className="rise rise-4 flex items-center gap-[2vw] pt-[3.4vw]">
@@ -289,7 +301,12 @@ export default function ScreenView() {
               </div>
               <div className="h-px w-[5vw] bg-gold-bright opacity-70" />
             </div>
-            <div className="break-all text-center text-[11.7vw] font-black leading-[1.02] tracking-[0.02em]">
+            <div
+              className={`text-center font-black leading-[1.02] tracking-[0.02em] ${
+                buzzedFit.nowrap ? "whitespace-nowrap" : "break-all"
+              }`}
+              style={{ fontSize: `${buzzedFit.sizeVw}vw` }}
+            >
               {buzzed.name}
             </div>
           </div>
