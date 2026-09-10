@@ -69,7 +69,7 @@ await wait(D);
 check("クリア後も早押しできる", host.lastState.buzzedBy?.name === "居残り");
 
 // 後片付け
-host.emit("host:nextRound");
+host.emit("host:restartRound");
 await wait(D);
 stay.close();
 host.emit("host:clearPlayers");

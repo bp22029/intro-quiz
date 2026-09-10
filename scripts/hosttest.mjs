@@ -202,7 +202,7 @@ check("打ち切られたら答えは出ない", screen.lastState.round.revealed
 await wait(2200);
 check("打ち切り後に遅れて答えが出たりしない", screen.lastState.round.revealed === false);
 
-host.emit("host:nextRound");
+host.emit("host:restartRound");
 await wait(D);
 a.emit("buzz");
 await wait(D);

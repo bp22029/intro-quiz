@@ -86,7 +86,7 @@ player.emit("buzz");
 await wait(D);
 host.emit("host:wrong");
 await wait(D);
-host.emit("host:nextRound"); // 「この問題をやり直す」で演出を打ち切る
+host.emit("host:restartRound"); // 「この問題をやり直す」で演出を打ち切る
 await wait(WRONG_COUNTDOWN_MS + D * 2);
 check(
   "演出を打ち切ったら再開しない",
@@ -94,7 +94,55 @@ check(
 );
 check("打ち切りで不正解表示も消える", hostState.state?.round?.wrongName === null);
 
+// --- 押し直しは「押し間違いの取り消し」なので、鳴っていたなら戻す ---
+host.emit("host:setSong", 0);
+await wait(D);
+host.emit("host:play");
+await wait(D);
+player.emit("buzz");
+await wait(D);
+check("押し直しの前提: 再生が止まっている", hostState.state?.round?.playing === false);
+
+host.emit("host:reset");
+await wait(D);
+check("押し直しで押下が消える", hostState.state?.buzzedBy === null);
+check("押し直しで曲が再開する", hostState.state?.round?.playing === true);
+check(
+  "押し直しではロックされない",
+  (hostState.state?.lockedIds ?? []).length === 0,
+);
+
+// 鳴っていなかったなら、押し直しでも鳴り出さない
+host.emit("host:setSong", 0);
+await wait(D);
+player.emit("buzz");
+await wait(D);
+host.emit("host:reset");
+await wait(D);
+check("止まっていたなら押し直しでも鳴らない", hostState.state?.round?.playing === false);
+
+// --- 答えを出すとサビが鳴るので、YouTubeモードでは playing が立つ ---
+host.emit("host:setSuspense", 0); // 溜めなしで即答え
+await wait(D);
+host.emit("host:reveal");
+await wait(D * 2);
+check("答えが表示される", hostState.state?.round?.revealed === true);
+check(
+  "YouTubeモードでは答え表示でサビが鳴る扱いになる",
+  hostState.state?.round?.playing === true,
+);
+
 host.emit("host:setMode", "manual");
+host.emit("host:setSong", 0);
+await wait(D);
+host.emit("host:reveal");
+await wait(D * 2);
+check(
+  "手動モードでは答え表示で playing を立てない",
+  hostState.state?.round?.playing === false,
+);
+
+host.emit("host:setSuspense", 2000); // 既定へ戻す
 host.emit("host:setSong", 0);
 await wait(D);
 

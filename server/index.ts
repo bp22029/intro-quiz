@@ -282,10 +282,14 @@ io.on("connection", (socket) => {
   // --- 司会操作（管理画面 /host から） ---
 
   socket.on("host:reset", () => {
-    // 押下の取り消しのみ。ロックはしない
+    // 押下の取り消しのみ。ロックはしない。
+    // 「押し間違いだった」という操作なので、押される直前の状態へ戻す。
+    // 曲が鳴っていたなら鳴らし直す（お手つきの GO! と同じ考え方）。
     clearWrong();
     buzzedBy = null;
-    console.log("[host] reset");
+    if (playingBeforeBuzz) playing = true;
+    playingBeforeBuzz = false;
+    console.log(`[host] reset${playing ? "・再生再開" : ""}`);
     broadcastState();
   });
 
@@ -318,7 +322,7 @@ io.on("connection", (socket) => {
     broadcastState();
   });
 
-  socket.on("host:nextRound", () => {
+  socket.on("host:restartRound", () => {
     clearWrong();
     clearReveal();
     buzzedBy = null;
@@ -357,6 +361,7 @@ io.on("connection", (socket) => {
     if (suspenseMs <= 0) {
       // 溜めなし。すぐ答えを出す
       revealed = true;
+      if (mode === "youtube") playing = true;
       console.log("[host] reveal（溜めなし）");
       broadcastState();
       return;
@@ -366,6 +371,9 @@ io.on("connection", (socket) => {
       revealed = true;
       revealAt = 0;
       revealTimer = null;
+      // YouTubeモードではここからサビが鳴り出す。実際に鳴っているのに
+      // playing=false のままだと、管理画面のボタン表示が実態とずれる。
+      if (mode === "youtube") playing = true;
       console.log("[host] reveal（答え表示）");
       broadcastState();
     }, suspenseMs);

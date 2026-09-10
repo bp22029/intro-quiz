@@ -81,7 +81,7 @@ check("投影画面には曲データが届く", screen.lastState.songs[0].title
 // 後片付け
 host.emit("host:setSongs", original);
 host.emit("host:setSong", 0);
-host.emit("host:nextRound");
+host.emit("host:restartRound");
 await wait(D);
 check("元の曲リストへ戻せる", host.lastState.songs.length === original.length);
 

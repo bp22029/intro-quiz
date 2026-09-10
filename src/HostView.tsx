@@ -219,7 +219,7 @@ export default function HostView() {
         </span>
         <div className="flex items-center gap-2">
           <span className="text-neutral-500">再生モード</span>
-          <ModeToggle mode={mode} />
+          <ModeToggle mode={mode} onChange={stopPlayback} />
         </div>
       </div>
 
@@ -272,8 +272,10 @@ export default function HostView() {
         <div className="mt-1 text-lg text-amber-300">
           {song?.owner ? `${song.owner} さんの推し曲` : ""}
         </div>
-        {song && song.videoId && (
-          // 手動再生用。t= で再生開始位置を指定できるので、イントロとサビを別操作にする
+        {mode === "manual" && song && song.videoId && (
+          // 手動モード専用。外部の YouTube タブを t= 付きで開く。
+          // YouTubeモードでは画面内のプレイヤーが鳴らすので出さない。
+          // 両方出すと、どちらが鳴るのか分からず二重再生の元になる。
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <YtBtn
               onClick={() => playAt(song.videoId, song.startSec)}
@@ -291,7 +293,7 @@ export default function HostView() {
             </span>
           </div>
         )}
-        {song && !song.videoId && (
+        {mode === "manual" && song && !song.videoId && (
           <div className="mt-3 text-sm text-neutral-600">
             動画IDが未設定です（手元で曲を探して再生してください）
           </div>
@@ -374,11 +376,16 @@ export default function HostView() {
             // 未準備のまま押すと「再生中なのに音が出ない」状態になるので止める
             disabled={!yt.ready}
           >
-            {yt.ready
-              ? playing
-                ? "⏸ 一時停止"
-                : "▶ イントロ再生"
-              : `動画を準備中… ${yt.readyCount}/${yt.total}`}
+            {!yt.ready
+              ? `動画を準備中… ${yt.readyCount}/${yt.total}`
+              : revealed
+                ? // 答えを出した後に鳴っているのはサビ。文言を実態に合わせる
+                  playing
+                  ? "⏸ サビを止める"
+                  : "▶ サビを再生"
+                : playing
+                  ? "⏸ 一時停止"
+                  : "▶ イントロ再生"}
           </Btn>
         ) : (
           <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-neutral-700 px-4 py-3 text-neutral-300">
@@ -453,8 +460,11 @@ export default function HostView() {
         <Btn
           tone="ghost"
           onClick={() => {
-            stopPlayback(); // 問題番号が変わらないので、ここで明示的に止める
-            socket.emit("host:nextRound");
+            // 問題番号が変わらないので、問題を移ったときの処理が走らない。
+            // 「やり直す」なら曲も頭に戻っていないとおかしいので、ここで明示的に行う。
+            stopPlayback(); // 手動モード: 再生タブを黙らせる
+            yt.seekToStart(index); // YouTubeモード: イントロの頭で止め直す
+            socket.emit("host:restartRound");
           }}
         >
           この問題をやり直す
@@ -671,7 +681,13 @@ function YtBtn({
   );
 }
 
-function ModeToggle({ mode }: { mode: PlayMode }) {
+function ModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: PlayMode;
+  onChange: () => void;
+}) {
   return (
     <div className="flex overflow-hidden rounded-lg border border-neutral-700">
       {(["manual", "youtube"] as PlayMode[]).map((m) => (
@@ -679,6 +695,10 @@ function ModeToggle({ mode }: { mode: PlayMode }) {
           key={m}
           onClick={(e) => {
             e.currentTarget.blur();
+            if (m === mode) return;
+            // 切り替える前に、今のモードで鳴っているものを黙らせる。
+            // 手動タブが鳴ったまま YouTube モードへ移ると二重に鳴る。
+            onChange();
             socket.emit("host:setMode", m);
           }}
           className={`px-3 py-1 ${

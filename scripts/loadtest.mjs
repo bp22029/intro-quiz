@@ -52,7 +52,7 @@ console.log(
 // --- 全員が同時に押す（最も重い瞬間）を3回試す ---
 const rounds = [];
 for (let r = 0; r < 3; r++) {
-  host.emit("host:nextRound");
+  host.emit("host:restartRound");
   await wait(600);
   players.forEach((s) => (s.buzzedAt = null));
 
@@ -91,7 +91,7 @@ await wait(500);
 const st = screen.stateBytes;
 console.log(`\n押下者は1人だけか: ${st > 0 ? "state 受信済み" : "state 未受信"}`);
 
-host.emit("host:nextRound");
+host.emit("host:restartRound");
 await wait(500);
 [...players, screen, host].forEach((s) => s.close());
 process.exit(0);

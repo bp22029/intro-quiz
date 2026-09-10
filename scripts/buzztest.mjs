@@ -34,7 +34,7 @@ await new Promise((r) => host.on("connect", r));
 await wait(D);
 
 // ロックは切断では消えない（リロード回避策）ので、前回実行の残りを明示的に片付ける
-host.emit("host:nextRound");
+host.emit("host:restartRound");
 await wait(D);
 
 check("3人 join されている", a.lastState.players.length === 3);
@@ -82,7 +82,7 @@ check("reset で buzzedBy が消える", a.lastState.buzzedBy === null);
 check("reset ではロックが増えない", a.lastState.lockedIds.length === 1);
 
 // --- nextRound で全解除 ---
-host.emit("host:nextRound");
+host.emit("host:restartRound");
 await wait(D);
 check("nextRound で lockedIds が空になる", a.lastState.lockedIds.length === 0);
 loser.emit("buzz");
@@ -90,7 +90,7 @@ await wait(D);
 check("nextRound 後は元ロック者も押せる", a.lastState.buzzedBy?.id === winner.id);
 
 // --- 切断で片付けられる ---
-host.emit("host:nextRound");
+host.emit("host:restartRound");
 await wait(D);
 b.close();
 await wait(D);
