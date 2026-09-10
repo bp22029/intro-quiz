@@ -703,7 +703,11 @@ export default function HostView() {
         ) : (
           <SongEditor
             draft={draft}
-            setDraft={setDraft}
+            // 更新関数を受け取れる形にする。曲名の取得は非同期なので、
+            // 呼び出し時点の draft を掴んだまま書き戻すと、その間の編集が消える。
+            setDraft={(next) =>
+              setDraft((prev) => (prev === null ? prev : next(prev)))
+            }
             onApply={() => {
               socket.emit("host:setSongs", draft);
               setDraft(null);
@@ -819,7 +823,8 @@ function SongEditor({
   onCancel,
 }: {
   draft: Song[];
-  setDraft: (s: Song[]) => void;
+  /** 必ず前の値から作る。非同期の書き戻しで編集を消さないため */
+  setDraft: (next: (prev: Song[]) => Song[]) => void;
   onApply: () => void;
   onCancel: () => void;
 }) {
@@ -827,7 +832,7 @@ function SongEditor({
   const [meta, setMeta] = useState<Record<number, string>>({});
 
   const update = (i: number, patch: Partial<Song>) =>
-    setDraft(draft.map((s, k) => (k === i ? { ...s, ...patch } : s)));
+    setDraft((prev) => prev.map((s, k) => (k === i ? { ...s, ...patch } : s)));
 
   /**
    * 動画IDから曲名とアーティストを取り込む。
@@ -850,8 +855,10 @@ function SongEditor({
         setMeta((m) => ({ ...m, [i]: j.error ?? "取得できませんでした" }));
         return;
       }
-      setDraft(
-        draft.map((s, k) => {
+      // ここは応答が返ってきた後なので、必ず最新の draft から作り直す。
+      // 呼び出し時点の draft を使うと、貼り付けた動画IDやサビ秒が巻き戻る。
+      setDraft((prev) =>
+        prev.map((s, k) => {
           if (k !== i) return s;
           return {
             ...s,
@@ -869,16 +876,20 @@ function SongEditor({
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir;
     if (j < 0 || j >= draft.length) return;
-    const next = [...draft];
-    [next[i], next[j]] = [next[j], next[i]];
-    setDraft(next);
+    setDraft((prev) => {
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
   };
 
-  const remove = (i: number) => setDraft(draft.filter((_, k) => k !== i));
+  const remove = (i: number) =>
+    setDraft((prev) => prev.filter((_, k) => k !== i));
 
   const add = () =>
-    setDraft([
-      ...draft,
+    setDraft((prev) => [
+      ...prev,
       { videoId: "", title: "", artist: "", owner: "", startSec: 0, chorusSec: 0 },
     ]);
 

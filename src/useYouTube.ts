@@ -159,6 +159,17 @@ export function useYouTube(
           const element = elements[index];
           if (!element) return;
 
+          if (!song.videoId) {
+            // 動画IDが未設定の行にはプレイヤーを作らない。
+            // 作ると onReady が来ないまま「準備中」で止まり、
+            // その1行のせいで全曲の再生ボタンが押せなくなる。
+            if (!readyFlagsRef.current[index]) {
+              readyFlagsRef.current[index] = true;
+              setReadyCount((count) => count + 1);
+            }
+            return;
+          }
+
           const player = new window.YT.Player(element, {
             playerVars: {
               controls: 0,
