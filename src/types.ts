@@ -23,7 +23,15 @@ export type State = {
   round: Round;
   mode: PlayMode;
   songs: Song[]; // 管理画面から編集できるので state に載せる（参加者には空で配る）
-  ytStatus: { ready: boolean; readyCount: number; total: number };
+  // 再生窓(/sound)の状態。connected は再生窓が繋がっているか。
+  // 未接続のまま再生を要求すると「管理画面は再生中なのに無音」になるため、
+  // 管理画面がこれを見て警告を出せるようにする。
+  ytStatus: {
+    ready: boolean;
+    readyCount: number;
+    total: number;
+    connected: boolean;
+  };
   suspenseMs: number; // 「正解は…」の長さ（ミリ秒）
 };
 

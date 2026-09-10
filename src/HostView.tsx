@@ -22,7 +22,7 @@ const EMPTY: State = {
   },
   mode: "manual",
   songs: [],
-  ytStatus: { ready: false, readyCount: 0, total: 0 },
+  ytStatus: { ready: false, readyCount: 0, total: 0, connected: false },
   suspenseMs: 2000,
 };
 
@@ -234,6 +234,27 @@ export default function HostView() {
         )}
       </div>
 
+      {mode === "youtube" && !state.ytStatus.connected && (
+        <div className="rounded-2xl border-2 border-amber-500 bg-amber-950/60 p-4 text-amber-100">
+          <div className="font-bold">再生窓が開いていません</div>
+          <div className="mt-1 text-sm text-amber-200">
+            YouTubeモードは再生窓が鳴らします。別ウィンドウで{" "}
+            <code className="rounded bg-black/40 px-1.5 py-0.5">/sound</code>{" "}
+            を開き、「再生を開始する」をクリックしてください。
+          </div>
+          <button
+            onClick={(e) => {
+              e.currentTarget.blur();
+              window.open("/sound", SOUND_WIN);
+              window.focus();
+            }}
+            className="mt-3 rounded-lg bg-amber-600 px-4 py-2 font-bold text-neutral-950 hover:bg-amber-500"
+          >
+            再生窓を開く
+          </button>
+        </div>
+      )}
+
       {/* 操作ボタン */}
       <div className="grid grid-cols-2 gap-3">
         {mode === "youtube" ? (
@@ -241,14 +262,16 @@ export default function HostView() {
             tone={playing ? "amber" : "blue"}
             onClick={() => socket.emit(playing ? "host:pause" : "host:play")}
             className="col-span-2"
-            // 未準備のまま押すと「再生中なのに音が出ない」状態になるので止める
-            disabled={!state.ytStatus.ready}
+            // 未接続・未準備のまま押すと「再生中なのに音が出ない」状態になるので止める
+            disabled={!state.ytStatus.connected || !state.ytStatus.ready}
           >
-            {state.ytStatus.ready
-              ? playing
-                ? "⏸ 一時停止"
-                : "▶ イントロ再生"
-              : `動画を準備中… ${state.ytStatus.readyCount}/${state.ytStatus.total}`}
+            {!state.ytStatus.connected
+              ? "再生窓が未接続"
+              : state.ytStatus.ready
+                ? playing
+                  ? "⏸ 一時停止"
+                  : "▶ イントロ再生"
+                : `動画を準備中… ${state.ytStatus.readyCount}/${state.ytStatus.total}`}
           </Btn>
         ) : (
           <label className="col-span-2 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-neutral-700 px-4 py-3 text-neutral-300">
@@ -770,6 +793,9 @@ export function ytUrl(videoId: string, sec: number): string {
 
 /** 曲再生用のタブ。同じ名前を使うことでタブが増え続けないようにする */
 const YT_TAB = "introquiz-player";
+
+/** 再生窓(/sound)。同じ名前を使うので、何度押しても窓は増えない */
+const SOUND_WIN = "introquiz-sound";
 
 /** サビ再生までの待ち時間の保存先。端末ごとに覚えておく */
 const CHORUS_DELAY_KEY = "introquiz:chorusDelay";

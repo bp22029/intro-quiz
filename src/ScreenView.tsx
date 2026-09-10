@@ -1,11 +1,12 @@
 // 投影画面。表示専用。操作は一切受け付けない（操作は /host で行う）。
 // 表示内容はサーバーの state をそのまま描くだけ。
-import { useEffect, useRef, useState } from "react";
+// 曲は鳴らさない。YouTubeモードの再生は再生窓(/sound)が担当する。
+// ここに iframe を置かないことで、いちばん壊れてほしくない画面を軽く保つ。
+import { useEffect, useState } from "react";
 import { beep, unlockAudio } from "./beep";
 import { socket } from "./socket";
 import type { State } from "./types";
 import { useCountdown } from "./useCountdown";
-import { useYouTube, ytErrorMessage } from "./useYouTube";
 
 const EMPTY: State = {
   buzzedBy: null,
@@ -22,7 +23,7 @@ const EMPTY: State = {
   },
   mode: "manual",
   songs: [],
-  ytStatus: { ready: false, readyCount: 0, total: 0 },
+  ytStatus: { ready: false, readyCount: 0, total: 0, connected: false },
   suspenseMs: 2000,
 };
 
@@ -34,11 +35,8 @@ export default function ScreenView() {
 
   const { index, revealed, playing, wrongName, resumeInMs, revealInMs } =
     state.round;
-  const mode = state.mode;
   const songs = state.songs;
   const song = songs[index];
-
-  const yt = useYouTube(songs, mode === "youtube");
 
   useEffect(() => {
     fetch("/api/url")
@@ -63,49 +61,6 @@ export default function ScreenView() {
     };
   }, []);
 
-  // プレイヤーの準備状況を管理画面へ知らせる（未準備のまま再生させないため）
-  useEffect(() => {
-    socket.emit("screen:yt", {
-      ready: yt.ready,
-      readyCount: yt.readyCount,
-      total: yt.total,
-    });
-  }, [yt.ready, yt.readyCount, yt.total]);
-
-  // 準備が整う前に再生を要求されていた場合、整った時点で鳴らし直す。
-  // これがないと「管理画面は再生中なのに音が出ない」状態のままになる。
-  useEffect(() => {
-    if (mode === "youtube" && playing && yt.ready && !revealed) {
-      yt.play(index);
-    }
-  }, [yt.ready, mode, playing, revealed, index, yt]);
-
-  // --- サーバー状態に合わせて YouTube プレイヤーを追従させる ---
-  const prev = useRef({ index: -1, revealed: false, playing: false });
-  useEffect(() => {
-    if (mode !== "youtube") return;
-    const p = prev.current;
-
-    if (p.index !== index) {
-      yt.pause(p.index);
-      yt.seekToStart(index);
-    } else if (revealed && !p.revealed) {
-      // 答えを出した瞬間にサビへ飛ぶ
-      yt.seekAndPlay(index, song?.chorusSec ?? song?.startSec ?? 0);
-    } else if (playing && !p.playing) {
-      yt.play(index);
-    } else if (!playing && p.playing) {
-      yt.pause(index);
-    }
-
-    prev.current = { index, revealed, playing };
-  }, [mode, index, revealed, playing, yt, song]);
-
-  // 答えを消したときはサビも止める
-  useEffect(() => {
-    if (mode === "youtube" && !revealed && !playing) yt.pause(index);
-  }, [revealed, playing, mode, yt, index]);
-
   // --- 経過秒数 ---
   useEffect(() => {
     if (!playing) {
@@ -117,7 +72,6 @@ export default function ScreenView() {
     return () => clearInterval(t);
   }, [playing, index]);
 
-  const currentError: number | undefined = yt.errors[index];
   const buzzed = state.buzzedBy;
   const countdown = useCountdown(resumeInMs);
   const showWrong = wrongName !== null;
@@ -255,24 +209,6 @@ export default function ScreenView() {
           </div>
         )}
 
-        {/* YouTube は音源としてのみ使う。映像は出さない（MVが無い曲があるため） */}
-        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden opacity-0">
-          {songs.map((_, i) => (
-            <div
-              key={i}
-              className="yt-slot absolute h-full w-full"
-              style={i === index ? { left: 0, top: 0 } : { left: "-200vw", top: 0 }}
-            >
-              <div className="h-full w-full" ref={yt.registerRef(i)} />
-            </div>
-          ))}
-        </div>
-
-        {mode === "youtube" && currentError !== undefined && (
-          <div className="absolute inset-x-10 bottom-8 rounded-xl border-2 border-red-500 bg-red-950/95 px-6 py-4 text-center text-2xl text-red-200">
-            この曲は YouTube で再生できません（{ytErrorMessage(currentError)}）
-          </div>
-        )}
       </main>
     </div>
   );
