@@ -86,6 +86,7 @@ export default function HostView() {
   const { index, revealed, playing, wrongName, resumeInMs, revealInMs } =
     state.round;
 
+
   const suspense = revealInMs > 0 && !revealed; // 「正解は…」の溜め中
   const mode = state.mode;
   const song = songs[index];
@@ -97,6 +98,21 @@ export default function HostView() {
   // YouTubeモードのときだけプレイヤーを作る（手動モードでは1つも作らない）
   const yt = useYouTube(songs, mode === "youtube");
   const ytError: number | undefined = yt.errors[index];
+  // 音量スライダーの下書き。離した時点で songs へ保存する。
+  const [volumeDraft, setVolumeDraft] = useState<number | null>(null);
+  const shownVolume = volumeDraft ?? song?.volume ?? 100;
+
+  /** 音量の下書きを songs へ書き戻す。スライダーを離したときだけ呼ぶ */
+  const saveVolume = useCallback(() => {
+    setVolumeDraft((draft) => {
+      if (draft === null) return null;
+      const next = songs.map((s, i) =>
+        i === index ? { ...s, volume: draft } : s,
+      );
+      socket.emit("host:setSongs", next);
+      return null;
+    });
+  }, [songs, index]);
 
   useEffect(() => {
     const onState = (s: State) => setState(s);
@@ -124,6 +140,7 @@ export default function HostView() {
   // 「前の問題」「次の問題」「問題一覧のクリック」すべてがここを通る。
   useEffect(() => {
     stopPlayback();
+    setVolumeDraft(null); // 別の曲の音量を引きずらない
   }, [index, stopPlayback]);
 
   // 画面を閉じるときに予約済みのサビ再生を残さない
@@ -315,6 +332,36 @@ export default function HostView() {
             </div>
           )}
         </div>
+      )}
+
+      {/*
+        曲ごとの音量。YouTube のラウドネス正規化は大きい音を下げるだけで
+        小さい音を持ち上げないため、アートトラック(〇〇 - Topic)とMVを混ぜると
+        音量差が残る。鳴らしながら合わせて、離した時点で songs へ保存する。
+      */}
+      {mode === "youtube" && song && (
+        <label className="flex items-center gap-3 rounded-2xl bg-neutral-900 px-4 py-3">
+          <span className="shrink-0 text-sm text-neutral-400">音量</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={shownVolume}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setVolumeDraft(v);
+              yt.setVolume(index, v); // 鳴っていれば即座に反映される
+            }}
+            onPointerUp={() => saveVolume()}
+            onKeyUp={() => saveVolume()}
+            onBlur={() => saveVolume()}
+            className="h-2 w-full cursor-pointer"
+          />
+          <span className="w-12 shrink-0 text-right tabular-nums text-neutral-300">
+            {shownVolume}
+          </span>
+        </label>
       )}
 
       {/* 操作ボタン */}

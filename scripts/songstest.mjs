@@ -102,6 +102,25 @@ check("8問目まで進める", screen.lastState.round.index === 7);
 host.emit("host:setSong", 0);
 await wait(D);
 
+// 曲ごとの音量。YouTube の正規化は大きい音を下げるだけなので、
+// アートトラックとMVを混ぜたときの差を曲ごとに埋められる必要がある。
+host.emit("host:setSongs", [
+  { videoId: "vol00001", title: "音量つき", startSec: 0, volume: 40 },
+  { videoId: "vol00002", title: "音量なし", startSec: 0 },
+  { videoId: "vol00003", title: "範囲外", startSec: 0, volume: 500 },
+  { videoId: "vol00004", title: "負の値", startSec: 0, volume: -20 },
+  { videoId: "vol00005", title: "数値でない", startSec: 0, volume: "abc" },
+]);
+await wait(D);
+check("音量が保存される", screen.lastState.songs[0].volume === 40);
+check(
+  "未指定の音量は undefined のまま（既定100として扱う）",
+  screen.lastState.songs[1].volume === undefined,
+);
+check("100を超える音量は100に丸められる", screen.lastState.songs[2].volume === 100);
+check("負の音量は0に丸められる", screen.lastState.songs[3].volume === 0);
+check("数値でない音量は0に丸められる", screen.lastState.songs[4].volume === 0);
+
 // 後片付け: 元の曲リストへ戻す
 host.emit("host:setSongs", original);
 host.emit("host:setSong", 0);

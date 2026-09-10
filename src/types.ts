@@ -36,4 +36,8 @@ export type Song = {
   owner: string; // この曲を挙げた人
   startSec: number; // イントロ開始位置（秒）
   chorusSec?: number; // サビの開始位置（秒）。答え表示時にここへ飛んで再生する
+  // 再生音量（0-100、既定100）。曲ごとに持つ。
+  // YouTube のラウドネス正規化は「下げるだけ」で小さい音を持ち上げないため、
+  // アートトラック(〇〇 - Topic)とMVを混ぜると音量差が残る。
+  volume?: number;
 };

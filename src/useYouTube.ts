@@ -26,7 +26,16 @@ export type YouTubeController = {
   seekToStart: (index: number) => void;
   /** 指定秒へジャンプしてそのまま再生する（サビ再生用） */
   seekAndPlay: (index: number, sec: number) => void;
+  /** 曲ごとの音量を即座に反映する（0-100）。スライダー用 */
+  setVolume: (index: number, value: number) => void;
 };
+
+/** songs[index].volume を 0-100 に収める。未設定は 100 */
+function volumeOf(song: Song | undefined): number {
+  const v = Number(song?.volume);
+  if (!Number.isFinite(v)) return 100;
+  return Math.max(0, Math.min(100, v));
+}
 
 let apiPromise: Promise<void> | null = null;
 
@@ -159,6 +168,7 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
                   videoId: song.videoId,
                   startSeconds: song.startSec,
                 });
+                event.target.setVolume(volumeOf(songsRef.current[index]));
 
                 if (!readyFlagsRef.current[index]) {
                   readyFlagsRef.current[index] = true;
@@ -217,6 +227,7 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
       if (!player) return;
 
       try {
+        player.setVolume(volumeOf(songsRef.current[index]));
         player.playVideo();
       } catch {
         // 未準備などのAPI例外は画面操作へ波及させない。
@@ -245,8 +256,23 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
       if (!player) return;
 
       try {
+        player.setVolume(volumeOf(songsRef.current[index]));
         player.seekTo(Math.max(0, sec), true);
         player.playVideo();
+      } catch {
+        // 未準備などのAPI例外は画面操作へ波及させない。
+      }
+    },
+    [getControllablePlayer],
+  );
+
+  const setVolume = useCallback(
+    (index: number, value: number): void => {
+      const player = getControllablePlayer(index);
+      if (!player) return;
+
+      try {
+        player.setVolume(Math.max(0, Math.min(100, Math.round(value))));
       } catch {
         // 未準備などのAPI例外は画面操作へ波及させない。
       }
@@ -281,6 +307,7 @@ export function useYouTube(songs: Song[], enabled: boolean): YouTubeController {
     pause,
     seekToStart,
     seekAndPlay,
+    setVolume,
   };
 }
 

@@ -64,6 +64,11 @@ function sanitizeSong(raw: unknown): Song | null {
       o.chorusSec === undefined || o.chorusSec === null || o.chorusSec === ""
         ? undefined
         : num(o.chorusSec),
+    // 未指定は undefined のまま（クライアント側で 100 として扱う）
+    volume:
+      o.volume === undefined || o.volume === null || o.volume === ""
+        ? undefined
+        : Math.max(0, Math.min(100, num(o.volume))),
   };
 }
 
