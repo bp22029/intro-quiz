@@ -166,6 +166,18 @@ export default function HostView() {
     songs.length > 0 && // サーバーの状態が届く前は出さない
     !sameSongs(saved, songs);
 
+  /**
+   * 「正解・答えを出す」の2度押し。
+   *
+   * 問題を送った直後は誰も押していないのに、このボタンだけは押せる状態にある。
+   * ここで手が滑ると客席に答えが出てしまい、取り返しがつかない
+   * （「この問題をやり直す」で状態は戻せても、見られた事実は戻らない）。
+   * 誰も押していないときだけ1回目を確認にする。
+   * 回答者が出ているときは一刻を争うので1回のままにする。毎回2度押しにすると
+   * 司会が反射で2回叩くようになり、確認の意味が無くなる。
+   */
+  const [armReveal, setArmReveal] = useState(false);
+
   // 音量スライダーの下書き。離した時点で songs へ保存する。
   const [volumeDraft, setVolumeDraft] = useState<number | null>(null);
   // この曲だけの設定があるか。無ければ全体音量に従う。
@@ -218,6 +230,19 @@ export default function HostView() {
       socket.off("disconnect", onDisconnect);
     };
   }, []);
+
+  // 確認待ちを持ち越さない。問題が変わった / 誰かが押した / 答えが出た、
+  // のいずれでも解除する。押しっぱなしのまま次の問題へ入ると意味が無くなる。
+  useEffect(() => {
+    setArmReveal(false);
+  }, [index, revealed, buzzed?.id]);
+
+  // 放っておいても解除する。だいぶ経ってからの1押しで答えが出るのは事故のもと。
+  useEffect(() => {
+    if (!armReveal) return;
+    const t = setTimeout(() => setArmReveal(false), 4000);
+    return () => clearTimeout(t);
+  }, [armReveal]);
 
   // 問題が変わったら再生タブを黙らせる。
   // 正解発表で鳴らしたサビが、次の問題に移っても流れ続けるのを防ぐ。
@@ -645,8 +670,14 @@ export default function HostView() {
             )}
 
             <Btn
-              tone="primary"
+              tone={armReveal ? "confirm" : "primary"}
               onClick={() => {
+                // 誰も押していないなら、1回目は確認にとどめる
+                if (!buzzed && !armReveal) {
+                  setArmReveal(true);
+                  return;
+                }
+                setArmReveal(false);
                 socket.emit("host:reveal");
                 if (autoChorus && mode === "manual" && song?.videoId) {
                   const sec = song.chorusSec ?? song.startSec;
@@ -667,7 +698,13 @@ export default function HostView() {
               }}
               disabled={revealed || suspense}
             >
-              {suspense ? "正解は…" : <>{Ico.circle()}正解・答えを出す</>}
+              {suspense ? (
+                "正解は…"
+              ) : armReveal ? (
+                <>{Ico.circle()}もう一度押すと答えが出ます</>
+              ) : (
+                <>{Ico.circle()}正解・答えを出す</>
+              )}
             </Btn>
             <Btn
               tone="danger"
@@ -1119,7 +1156,7 @@ function Btn({
   children: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
-  tone?: "primary" | "danger" | "play" | "playing" | "ghost";
+  tone?: "primary" | "danger" | "play" | "playing" | "confirm" | "ghost";
   className?: string;
 }) {
   const tones: Record<string, string> = {
@@ -1129,6 +1166,8 @@ function Btn({
     play: "bg-sink hover:bg-panel text-ink border border-chip",
     // 鳴っている最中。塗りにすると「正解」と見分けがつかないので枠だけにする
     playing: "border border-gold text-gold hover:bg-panel",
+    // 2度押しの1回目。塗りを外して、まだ出ていないことを一目で分かるようにする
+    confirm: "border-2 border-gold text-gold hover:bg-panel",
     ghost: "bg-sink hover:bg-panel text-ink-2 border border-chip",
   };
   return (
