@@ -38,6 +38,8 @@ export default function HostView() {
   // 2回目以降は開いたタブの location を差し替えて再生位置だけ移す。
   const playerWin = useRef<Window | null>(null);
   const [playerOpen, setPlayerOpen] = useState(false);
+  // 予約中のサビ再生。問題を移るときに取り消さないと、次の問題で鳴り出す。
+  const chorusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 「正解」を押してからサビを鳴らすまでの待ち時間（秒）。
   // YouTube の読み込みぶん早めに投げたいので、溜めとは別の値にしている。
   const [chorusDelay, setChorusDelay] = useState(() => {
@@ -57,6 +59,21 @@ export default function HostView() {
       setPlayerOpen(!!playerWin.current);
     }
     window.focus(); // 管理画面にフォーカスを戻す
+  }, []);
+
+  /**
+   * 再生タブを黙らせる。予約済みのサビ再生も取り消す。
+   * 別オリジンのタブは中身を触れないが location への書き込みだけは許されているので、
+   * about:blank へ飛ばすのが手動モードで音を止められる唯一の手段になる。
+   * タブ自体は閉じずに残すので、次の playAt はフォーカスを奪わずに使い回せる。
+   */
+  const stopPlayback = useCallback(() => {
+    if (chorusTimer.current !== null) {
+      clearTimeout(chorusTimer.current);
+      chorusTimer.current = null;
+    }
+    const w = playerWin.current;
+    if (w && !w.closed) w.location.href = "about:blank";
   }, []);
 
   const songs = state.songs;
@@ -90,6 +107,21 @@ export default function HostView() {
       socket.off("disconnect", onDisconnect);
     };
   }, []);
+
+  // 問題が変わったら再生タブを黙らせる。
+  // 正解発表で鳴らしたサビが、次の問題に移っても流れ続けるのを防ぐ。
+  // 「前の問題」「次の問題」「問題一覧のクリック」すべてがここを通る。
+  useEffect(() => {
+    stopPlayback();
+  }, [index, stopPlayback]);
+
+  // 画面を閉じるときに予約済みのサビ再生を残さない
+  useEffect(
+    () => () => {
+      if (chorusTimer.current !== null) clearTimeout(chorusTimer.current);
+    },
+    [],
+  );
 
   if (!armed) {
     return (
@@ -257,8 +289,12 @@ export default function HostView() {
               const w = playerWin.current;
               const delayMs = Math.round(chorusDelay * 1000);
               if (w && !w.closed && delayMs > 0) {
-                // タブが既にあれば、指定した秒数だけ待ってから鳴らす
-                setTimeout(() => playAt(song.videoId, sec), delayMs);
+                // タブが既にあれば、指定した秒数だけ待ってから鳴らす。
+                // 問題を移ったときに取り消せるよう ref に持たせる。
+                chorusTimer.current = setTimeout(() => {
+                  chorusTimer.current = null;
+                  playAt(song.videoId, sec);
+                }, delayMs);
               } else {
                 // タブが無いときはクリック起点でないと開けないので、すぐ開く
                 playAt(song.videoId, sec);
@@ -284,7 +320,13 @@ export default function HostView() {
         >
           押し直し
         </Btn>
-        <Btn tone="ghost" onClick={() => socket.emit("host:nextRound")}>
+        <Btn
+          tone="ghost"
+          onClick={() => {
+            stopPlayback(); // 問題番号が変わらないので、ここで明示的に止める
+            socket.emit("host:nextRound");
+          }}
+        >
           この問題をやり直す
         </Btn>
 
