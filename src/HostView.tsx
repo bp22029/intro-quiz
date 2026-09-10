@@ -231,7 +231,22 @@ export default function HostView() {
         <span className={connected ? "text-green-500" : "text-yellow-500"}>
           {connected ? "● 接続中" : "○ 再接続中…"}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/*
+            投影画面を開く。司会と投影の担当が同じ人であることが多いので、
+            URLを手で打たずに出せるようにする。同じ名前の窓を使うので増えない。
+            投影用ディスプレイへ移してから全画面にする想定。
+          */}
+          <button
+            onClick={(e) => {
+              e.currentTarget.blur();
+              window.open("/screen", SCREEN_WIN);
+              window.focus(); // 操作は管理画面に戻す
+            }}
+            className="rounded-lg border border-neutral-600 px-3 py-1 text-neutral-300 hover:bg-neutral-800"
+          >
+            投影画面を開く
+          </button>
           <span className="text-neutral-500">再生モード</span>
           <ModeToggle mode={mode} onChange={stopPlayback} />
         </div>
@@ -1051,6 +1066,9 @@ export function ytUrl(videoId: string, sec: number): string {
 
 /** 曲再生用のタブ。同じ名前を使うことでタブが増え続けないようにする */
 const YT_TAB = "introquiz-player";
+
+/** 投影画面の窓。同じ名前を使うので、何度押しても窓は増えない */
+const SCREEN_WIN = "introquiz-screen";
 
 /** サビ再生までの待ち時間の保存先。端末ごとに覚えておく */
 const CHORUS_DELAY_KEY = "introquiz:chorusDelay";
