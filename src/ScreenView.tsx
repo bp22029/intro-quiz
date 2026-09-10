@@ -2,6 +2,10 @@
 // 表示内容はサーバーの state をそのまま描くだけ。
 // 曲は鳴らさない。YouTubeモードの再生は管理画面(/host)が担当する。
 // ここに iframe を置かないことで、いちばん壊れてほしくない画面を軽く保つ。
+//
+// 文字の大きさはすべて vw で置く。会場のプロジェクターは 1280 とも 1920 とも
+// 限らないので、px で置くと解像度によって「後ろの席から読めない」が起きる。
+// 設計時の基準は 1280×720（1px = 0.078vw）。
 import { useEffect, useState } from "react";
 import { beep, playBuzz, preloadSfx, unlockAudio } from "./beep";
 import { RoomMissing, useRoomMissing } from "./RoomMissing";
@@ -29,6 +33,13 @@ const EMPTY: State = {
   runUp: true,
   masterVolume: 70,
 };
+
+/**
+ * サイドバーに並べる参加者の上限。溢れたぶんは「ほか N 人」に畳む。
+ * 畳み先を用意しないと、人数が増えた当日に下の数人が無言で見切れる
+ * （枠に overflow-hidden が要るので、はみ出しても誰も気づかない）。
+ */
+const MAX_CHIPS = 15;
 
 export default function ScreenView() {
   const [state, setState] = useState<State>(EMPTY);
@@ -77,10 +88,21 @@ export default function ScreenView() {
   // 音を出すには1クリックが必要（ブラウザの制約）
   if (!ready) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-10">
-        <h1 className="text-7xl font-black">イントロクイズ</h1>
+      <div className="flex h-full flex-col items-center justify-center gap-10 bg-ground">
+        <div className="flex items-center gap-6">
+          <div className="h-px w-24 bg-gold opacity-60" />
+          <div className="text-2xl tracking-[0.5em] text-gold">
+            <span className="pl-[0.5em]">イントロクイズ</span>
+          </div>
+          <div className="h-px w-24 bg-gold opacity-60" />
+        </div>
+        {roomCode && (
+          <div className="font-disp text-8xl tracking-[0.04em] text-gold-bright">
+            {roomCode}
+          </div>
+        )}
         <button
-          className="rounded-2xl bg-red-600 px-20 py-8 text-4xl font-bold hover:bg-red-500"
+          className="rounded-full bg-gold px-20 py-6 text-4xl font-black text-ground hover:bg-gold-bright"
           onClick={async (e) => {
             e.currentTarget.blur();
             await unlockAudio();
@@ -91,17 +113,25 @@ export default function ScreenView() {
         >
           投影を開始する
         </button>
-        <p className="text-xl text-neutral-500">
+        <p className="text-center text-xl leading-loose text-ink-3">
           クリックすると音が出せるようになります（ブラウザの制約）
+          <br />
+          プロジェクターへ移して全画面にしてから押してください
         </p>
       </div>
     );
   }
 
+  const shown = state.players.slice(0, MAX_CHIPS);
+  const folded = state.players.length - shown.length;
+
   return (
-    <div className="flex h-full bg-neutral-950">
-      {/* 左: QR と参加者 */}
-      <aside className="flex w-[320px] shrink-0 flex-col gap-5 border-r border-neutral-800 p-6">
+    <div className="flex h-full bg-ground">
+      {/*
+        左: QR と参加者。ここは全状態で位置も見た目も動かさない。
+        客席が「どこを見ればいいか」を覚え直さずに済む。
+      */}
+      <aside className="flex w-[25vw] min-w-[280px] max-w-[440px] shrink-0 flex-col gap-[1.6vw] border-r border-rule bg-sink p-[2.2vw]">
         {/*
           state が届くまでは出さない。部屋を指さないQR（＝ロビーのQR）が
           一瞬でもプロジェクターに出ると、読んだ人が別の場所へ行ってしまう。
@@ -110,117 +140,172 @@ export default function ScreenView() {
           <img
             src={`/qr.png?room=${encodeURIComponent(roomCode)}`}
             alt="参加用QR"
-            className="w-full rounded-xl bg-white p-2"
+            className="w-full self-center rounded-r3 bg-ink p-[1vw]"
           />
         ) : (
-          <div className="aspect-square w-full rounded-xl bg-neutral-900" />
+          <div className="aspect-square w-full rounded-r3 bg-panel" />
         )}
-        {/* QRが読めない席のために、コードを大きく出す。口頭でも読み上げられる形 */}
-        <div className="text-center text-4xl font-black tracking-[0.2em]">
-          {roomCode}
+        <div className="flex flex-col items-center gap-1">
+          <div className="font-disp text-[3.9vw] leading-none tracking-[0.12em] text-gold-bright">
+            {roomCode}
+          </div>
+          <div className="text-[1.17vw] text-ink-3">
+            {url.replace(/^https?:\/\//, "")}
+          </div>
         </div>
-        <div className="text-center text-base text-neutral-500">
-          {url.replace(/^https?:\/\//, "")}
-        </div>
-        <div className="min-h-0 flex-1">
-          <div className="pb-3 text-2xl text-neutral-400">
+        <div className="h-px bg-gradient-to-r from-transparent via-gold to-transparent opacity-55" />
+        <div className="flex min-h-0 flex-1 flex-col gap-[0.9vw]">
+          <div className="shrink-0 text-[1.25vw] tracking-[0.18em] text-gold">
             参加者 {state.players.length}人
           </div>
-          <ul className="flex flex-wrap gap-2">
-            {state.players.map((p) => {
+          <ul className="flex min-h-0 flex-1 flex-wrap content-start gap-[0.55vw] overflow-hidden">
+            {shown.map((p) => {
               const locked =
                 state.lockedIds.includes(p.id) ||
                 state.lockedNames.includes(p.name);
               return (
                 <li
                   key={p.id}
-                  className={`rounded-lg px-3 py-1.5 text-2xl ${
+                  className={`flex items-baseline gap-2 rounded-full border px-[1.1vw] py-[0.4vw] text-[1.4vw] ${
                     locked
-                      ? "bg-neutral-900 text-neutral-600"
-                      : "bg-neutral-800 text-neutral-100"
+                      ? "border-chip-locked text-chip-ink"
+                      : "border-chip text-ink"
                   }`}
                 >
-                  {p.name}
-                  {locked && <span className="ml-2 text-base">お手つき</span>}
+                  <span>{p.name}</span>
+                  {locked && (
+                    <span className="text-[0.95vw] tracking-[0.08em] text-gold-dim">
+                      お手つき
+                    </span>
+                  )}
                 </li>
               );
             })}
+            {folded > 0 && (
+              <li className="rounded-full border border-dashed border-gold-dim px-[1.1vw] py-[0.4vw] text-[1.4vw] text-gold">
+                ほか {folded} 人
+              </li>
+            )}
           </ul>
         </div>
       </aside>
 
-      {/* 右: 大きく見せる領域 */}
+      {/* 右: 大きく見せる領域。状態で変わるのはこの面だけ */}
       <main
         className={`relative flex min-w-0 flex-1 flex-col items-center justify-center overflow-hidden px-10 transition-colors duration-150 ${
           showWrong
-            ? "bg-red-800"
+            ? "bg-[radial-gradient(120%_90%_at_50%_40%,theme(colors.miss.glow)_0%,theme(colors.miss.DEFAULT)_68%)]"
             : suspense
-              ? "bg-neutral-900"
+              ? "bg-[radial-gradient(120%_90%_at_50%_45%,theme(colors.hush.glow)_0%,theme(colors.hush.DEFAULT)_70%)]"
               : buzzed && !revealed
-              ? "bg-emerald-700"
-              : "bg-neutral-950"
+                ? "bg-[radial-gradient(120%_90%_at_50%_40%,theme(colors.win.glow)_0%,theme(colors.win.DEFAULT)_66%)]"
+                : "bg-[radial-gradient(120%_90%_at_50%_38%,#16203a_0%,theme(colors.ground)_64%)]"
         }`}
       >
-        {/* 全問数は出さない。あと何問あるかを客席に見せないため */}
-        <div className="absolute left-8 top-6 text-2xl text-neutral-500">
-          第 {index + 1} 問
-        </div>
+        {/*
+          全問数は出さない。あと何問あるかを客席に見せないため。
+          受付中は真ん中に大きく出るので、隅には出さない（重複するため）。
+        */}
+        {(revealed || showWrong || buzzed || suspense) && (
+          <div
+            className={`absolute left-[3vw] top-[3.5vh] font-disp text-[1.64vw] tracking-[0.1em] ${
+              showWrong
+                ? "text-miss-corner"
+                : buzzed && !revealed
+                  ? "text-win-corner"
+                  : "text-ink-4"
+            }`}
+          >
+            第 {index + 1} 問
+          </div>
+        )}
 
         {suspense ? (
-          <div className="text-center">
-            <div className="text-[11vw] font-black leading-none">正解は…</div>
+          <div className="flex flex-col items-center">
+            <div className="text-[10.3vw] font-black leading-none tracking-[0.06em] text-gold-bright">
+              正解は…
+            </div>
+            <div className="flex gap-3 pt-[4vw]">
+              <div className="h-[0.45vw] w-[4vw] rounded-full bg-gold" />
+              <div className="h-[0.45vw] w-[4vw] rounded-full bg-gold opacity-45" />
+              <div className="h-[0.45vw] w-[4vw] rounded-full bg-gold opacity-[0.15]" />
+            </div>
           </div>
         ) : showWrong ? (
-          <div className="text-center">
-            <div className="text-[13vw] font-black leading-none">不正解</div>
-            <div className="mt-2 text-4xl text-red-100">{wrongName} さん</div>
-            <div className="mt-10 text-3xl text-red-100">
+          <div className="flex flex-col items-center">
+            <div className="text-[9vw] font-black leading-none tracking-[0.04em] text-miss-ink">
+              不正解
+            </div>
+            <div className="pt-[0.8vw] text-[3.1vw] text-miss-ink2">
+              {wrongName} さん
+            </div>
+            <div className="mt-[3.3vw] h-px w-[20vw] bg-miss-ink opacity-35" />
+            <div className="pt-[2vw] text-[2vw] tracking-[0.16em] text-miss-ink2">
               {countdown > 0 ? "まもなく再開" : "受付を再開しました"}
             </div>
-            <div className="text-[12vw] font-black leading-none tabular-nums">
+            <div className="font-disp text-[11.7vw] leading-none tabular-nums text-ink">
               {countdown > 0 ? countdown : "GO!"}
             </div>
           </div>
         ) : revealed ? (
           // key に問題番号を入れて、曲が変わるたびにアニメーションをやり直させる
-          <div className="text-center" key={`answer-${index}`}>
-            <div className="rise rise-1 mb-4 text-3xl tracking-[0.4em] text-neutral-500">
-              答え
+          <div className="flex flex-col items-center" key={`answer-${index}`}>
+            <div className="rise rise-1 flex w-full items-center justify-center gap-4 pb-[2vw]">
+              <div className="h-px w-[6.9vw] bg-gold opacity-60" />
+              <div className="text-[1.64vw] tracking-[0.55em] text-gold">
+                <span className="pl-[0.55em]">答え</span>
+              </div>
+              <div className="h-px w-[6.9vw] bg-gold opacity-60" />
             </div>
-            <div className="rise rise-2 break-all text-[8vw] font-black leading-[1.05]">
+            <div className="rise rise-2 text-balance text-center text-[7.8vw] font-black leading-[1.06] tracking-[0.02em]">
               {song?.title ?? "-"}
             </div>
-            <div className="rise rise-3 mt-4 text-[4vw] font-bold leading-tight text-neutral-300">
+            <div className="rise rise-3 pt-[1.2vw] text-[3vw] font-medium leading-tight text-ink-2">
               {song?.artist ?? ""}
             </div>
-            {/* 推した人が空なら帯ごと出さない。持ち寄りでない曲もあるため */}
-            {song?.owner && (
-              <div className="rise rise-4 mt-10 inline-block rounded-2xl bg-amber-400 px-10 py-4 text-[2.8vw] font-black text-neutral-900">
-                {song.owner} さんの推し曲
-              </div>
-            )}
-            {buzzed && (
-              <div className="rise rise-4 mt-8 text-4xl text-emerald-400">
-                正解者: {buzzed.name} さん
-              </div>
-            )}
+            <div className="rise rise-4 flex items-center gap-[2vw] pt-[3.4vw]">
+              {/* 推した人が空なら帯ごと出さない。持ち寄りでない曲もあるため */}
+              {song?.owner && (
+                <div className="rounded-full bg-gold px-[2.5vw] py-[1vw] font-disp text-[1.95vw] text-ground">
+                  {song.owner} さんの推し曲
+                </div>
+              )}
+              {buzzed && (
+                <div className="text-[1.95vw] text-gold-bright">
+                  正解&emsp;{buzzed.name} さん
+                </div>
+              )}
+            </div>
           </div>
         ) : buzzed ? (
-          <div className="text-center">
-            <div className="mb-3 text-5xl font-bold text-emerald-100">回答者</div>
-            <div className="break-all text-[13vw] font-black leading-none">
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-4 pb-[1.4vw]">
+              <div className="h-px w-[5vw] bg-gold-bright opacity-70" />
+              <div className="text-[1.9vw] tracking-[0.5em] text-gold-bright">
+                <span className="pl-[0.5em]">回答者</span>
+              </div>
+              <div className="h-px w-[5vw] bg-gold-bright opacity-70" />
+            </div>
+            <div className="break-all text-center text-[11.7vw] font-black leading-[1.02] tracking-[0.02em]">
               {buzzed.name}
             </div>
           </div>
         ) : (
-          // 回答者も答えも出ていない間は、問題番号を出し続ける。
-          // 経過秒数を出していたが、何の時間か伝わらず、
-          // お手つき後の再開で0へ戻るのも意味を持たないので廃止した。
-          <div className="text-center">
-            <div className="text-[15vw] font-black leading-none">第 {index + 1} 問</div>
+          // 受付中。上演時間の8割はこの状態なので、いちばん静かにしておく
+          <div className="flex flex-col items-center">
+            <div className="flex items-baseline gap-[2vw]">
+              <div className="text-[4.2vw] font-medium text-gold">第</div>
+              <div className="font-disp text-[21.9vw] leading-none text-gold-bright">
+                {index + 1}
+              </div>
+              <div className="text-[4.2vw] font-medium text-gold">問</div>
+            </div>
+            <div className="mt-[3.4vw] h-px w-[15.6vw] bg-gradient-to-r from-transparent via-gold to-transparent" />
+            <div className="pt-[1.7vw] text-[2vw] tracking-[0.1em] text-ink-3">
+              わかったら押してください
+            </div>
           </div>
         )}
-
       </main>
     </div>
   );
