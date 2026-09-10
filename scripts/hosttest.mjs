@@ -155,6 +155,21 @@ await wait(D);
 check("不正な曲番号を無視する", screen.lastState.round.index === 1);
 check("不正なモードを無視する", screen.lastState.mode === "youtube");
 
+// --- 早押しの音を選べる（鳴らすのは投影画面なので共有状態） ---
+check("早押し音の既定はボタン音", screen.lastState.buzzSound === "click");
+host.emit("host:setBuzzSound", "tone");
+await wait(D);
+check("早押し音を切り替えられる", screen.lastState.buzzSound === "tone");
+host.emit("host:setBuzzSound", "synth");
+await wait(D);
+check("合成音も選べる", screen.lastState.buzzSound === "synth");
+host.emit("host:setBuzzSound", "存在しない音");
+await wait(D);
+check("不正な指定を無視する", screen.lastState.buzzSound === "synth");
+host.emit("host:setBuzzSound", "click");
+await wait(D);
+check("既定へ戻せる", screen.lastState.buzzSound === "click");
+
 // --- お手つき演出（不正解表示 + 3秒カウントダウン） ---
 host.emit("host:setSong", 0);
 await wait(D);

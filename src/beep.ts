@@ -1,3 +1,5 @@
+import type { BuzzSound } from "./types";
+
 let audioContext: AudioContext | null = null;
 
 function getAudioContext(): AudioContext | null {
@@ -72,6 +74,67 @@ export function beep(): void {
   } catch {
     // 未解除・一時停止などで再生できない場合も、早押し処理は止めない。
   }
+}
+
+// --- 音源ファイル ---
+//
+// 効果音は public/sfx/ に置いたファイルを使う。new Audio() ではなく
+// AudioContext に取り込んでおくのは、鳴らすまでの遅延を小さくするためと、
+// 早押し連打で音が詰まらないようにするため。
+//
+// 読み込みに失敗しても無音にはしない。上の beep() が代わりに鳴る。
+
+const SFX_URL: Record<Exclude<BuzzSound, "synth">, string> = {
+  click: "/sfx/buzz-click.mp3",
+  tone: "/sfx/buzz-tone.mp3",
+};
+
+const buffers = new Map<string, AudioBuffer>();
+
+/**
+ * 音源を先読みしてデコードしておく。
+ * 「投影を開始する」「操作をはじめる」のクリックから呼ぶ想定
+ * （AudioContext はそこで初めて作られるため）。
+ */
+export async function preloadSfx(): Promise<void> {
+  const ctx = audioContext;
+  if (!ctx) return;
+
+  await Promise.all(
+    (Object.keys(SFX_URL) as Array<keyof typeof SFX_URL>).map(async (kind) => {
+      if (buffers.has(kind)) return;
+      try {
+        const res = await fetch(SFX_URL[kind]);
+        if (!res.ok) return;
+        buffers.set(kind, await ctx.decodeAudioData(await res.arrayBuffer()));
+      } catch {
+        // 取得・デコードに失敗した音は諦める。合成音へ落ちる。
+      }
+    }),
+  );
+}
+
+/** 早押しの合図を鳴らす。音源が無ければ合成音へ落ちる */
+export function playBuzz(kind: BuzzSound): void {
+  const ctx = audioContext;
+  if (!ctx || ctx.state !== "running") return;
+
+  if (kind !== "synth") {
+    const buffer = buffers.get(kind);
+    if (buffer) {
+      try {
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(ctx.destination);
+        src.start();
+        return;
+      } catch {
+        // 再生できなければ合成音へ落ちる
+      }
+    }
+  }
+
+  beep();
 }
 
 /** 「準備完了」ボタンのクリックハンドラから呼ぶ。AudioContext.resume() する */

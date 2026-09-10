@@ -2,8 +2,8 @@
 // 表示内容はサーバーの state をそのまま描くだけ。
 // 曲は鳴らさない。YouTubeモードの再生は管理画面(/host)が担当する。
 // ここに iframe を置かないことで、いちばん壊れてほしくない画面を軽く保つ。
-import { useEffect, useState } from "react";
-import { beep, unlockAudio } from "./beep";
+import { useEffect, useRef, useState } from "react";
+import { beep, playBuzz, preloadSfx, unlockAudio } from "./beep";
 import { socket } from "./socket";
 import type { State } from "./types";
 import { useCountdown } from "./useCountdown";
@@ -25,6 +25,7 @@ const EMPTY: State = {
   songs: [],
   suspenseMs: 2000,
   runUp: true,
+  buzzSound: "click",
   masterVolume: 70,
 };
 
@@ -32,6 +33,9 @@ export default function ScreenView() {
   const [state, setState] = useState<State>(EMPTY);
   const [url, setUrl] = useState<string>(window.location.origin);
   const [ready, setReady] = useState(false); // 「準備」クリック済みか
+  // socket のハンドラを貼り直さずに最新の設定を読むための控え
+  const buzzSoundRef = useRef(state.buzzSound);
+  buzzSoundRef.current = state.buzzSound;
 
   // playing は投影画面では使わない（曲は管理画面が鳴らし、秒数表示も廃止した）
   const { index, revealed, wrongName, resumeInMs, revealInMs } = state.round;
@@ -47,7 +51,8 @@ export default function ScreenView() {
 
   useEffect(() => {
     const onState = (s: State) => setState(s);
-    const onBuzzed = () => beep(); // 手動モードではこれが唯一の停止トリガー
+    // 早押しの合図。この画面だけが鳴らす（管理画面と二重に鳴らさないため）
+    const onBuzzed = () => playBuzz(buzzSoundRef.current);
     // 曲データは投影画面と管理画面にだけ配られる。繋がり直すたびに名乗る。
     const onConnect = () => socket.emit("role:screen");
     socket.on("state", onState);
@@ -78,6 +83,7 @@ export default function ScreenView() {
             e.currentTarget.blur();
             await unlockAudio();
             beep();
+            void preloadSfx(); // 本番中に読み込み待ちを起こさない
             setReady(true);
           }}
         >

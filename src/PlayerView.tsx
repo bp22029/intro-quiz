@@ -44,6 +44,7 @@ const EMPTY: State = {
   songs: [],
   suspenseMs: 2000,
   runUp: true,
+  buzzSound: "click",
   masterVolume: 70,
 };
 

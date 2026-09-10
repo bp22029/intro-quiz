@@ -4,7 +4,14 @@ import http from "http";
 import path from "path";
 import QRCode from "qrcode";
 import { Server } from "socket.io";
-import type { JoinAck, PlayMode, Player, Song, State } from "../src/types";
+import type {
+  BuzzSound,
+  JoinAck,
+  PlayMode,
+  Player,
+  Song,
+  State,
+} from "../src/types";
 import { parseYouTubeMeta } from "../src/ytmeta";
 
 // ---------------------------------------------------------------------------
@@ -40,6 +47,8 @@ let playing = false;
 let mode: PlayMode = "youtube";
 // 溜めのあいだに助走を鳴らすか。演出なので当日その場で切り替えられるようにする。
 let runUp = true;
+// 早押しの合図に使う音。鳴らすのは投影画面なので、共有状態として持つ。
+let buzzSound: BuzzSound = "click";
 // 全体音量。曲ごとの volume が未設定ならこの値で鳴る。
 // 100 はプレイヤーの最大値で会場では大きすぎることが多いので、控えめから始める。
 let masterVolume = 70;
@@ -151,6 +160,7 @@ function snapshot(): State {
     songs,
     suspenseMs,
     runUp,
+    buzzSound,
     masterVolume,
     round: {
       index,
@@ -495,6 +505,13 @@ io.on("connection", (socket) => {
   });
 
   /** 「正解は…」の長さを変える。当日の進行に合わせて調整できるように */
+  socket.on("host:setBuzzSound", (raw: unknown) => {
+    if (raw !== "click" && raw !== "tone" && raw !== "synth") return;
+    buzzSound = raw;
+    console.log(`[host] buzzSound=${buzzSound}`);
+    broadcastState();
+  });
+
   socket.on("host:setRunUp", (raw: unknown) => {
     runUp = raw === true;
     console.log(`[host] runUp=${runUp}`);

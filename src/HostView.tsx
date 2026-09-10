@@ -8,7 +8,7 @@
 // 再生ボタンを押す瞬間、この画面は必ず前面にあるので、延期される条件が
 // 原理的に成立しない。別窓に分けると並べて配置し続ける必要が出てしまう。
 import { useCallback, useEffect, useRef, useState } from "react";
-import { beep, unlockAudio } from "./beep";
+import { beep, playBuzz, preloadSfx, unlockAudio } from "./beep";
 import { socket } from "./socket";
 import { useCountdown } from "./useCountdown";
 import type { PlayMode, Song, State } from "./types";
@@ -31,6 +31,7 @@ const EMPTY: State = {
   songs: [],
   suspenseMs: 2000,
   runUp: true,
+  buzzSound: "click",
   masterVolume: 70,
 };
 
@@ -263,6 +264,7 @@ export default function HostView() {
             e.currentTarget.blur();
             await unlockAudio();
             beep();
+            void preloadSfx(); // 試聴に使う。本番中の読み込み待ちも防ぐ
             setArmed(true);
           }}
         >
@@ -672,6 +674,35 @@ export default function HostView() {
             </span>
           </label>
         )}
+
+        {/*
+          早押しの合図。鳴らすのは投影画面だが、選ぶのは司会なのでここに置く。
+          その場で聴き比べられるよう試聴を付ける（試聴はこの画面から鳴る）。
+        */}
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <span className="text-sm text-neutral-400">早押しの音</span>
+          <select
+            value={state.buzzSound}
+            onChange={(e) => socket.emit("host:setBuzzSound", e.target.value)}
+            className="rounded-lg bg-neutral-800 px-3 py-2 text-neutral-100 outline-none focus:ring-2 focus:ring-sky-600"
+          >
+            <option value="click">ボタン（押し込む音あり）</option>
+            <option value="tone">電子音（押し込む音なし）</option>
+            <option value="synth">合成音（音源ファイル不要）</option>
+          </select>
+          <button
+            onClick={(e) => {
+              e.currentTarget.blur();
+              playBuzz(state.buzzSound);
+            }}
+            className="rounded-lg border border-neutral-600 px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-800"
+          >
+            試聴
+          </button>
+          <span className="text-xs text-neutral-500">
+            本番は投影画面から鳴ります
+          </span>
+        </div>
 
         <div className="flex flex-wrap gap-4">
           <label className="flex items-center gap-2">
