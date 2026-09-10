@@ -102,11 +102,19 @@ export default function ScreenView() {
     <div className="flex h-full bg-neutral-950">
       {/* 左: QR と参加者 */}
       <aside className="flex w-[320px] shrink-0 flex-col gap-5 border-r border-neutral-800 p-6">
-        <img
-          src={`/qr.png?room=${encodeURIComponent(roomCode)}`}
-          alt="参加用QR"
-          className="w-full rounded-xl bg-white p-2"
-        />
+        {/*
+          state が届くまでは出さない。部屋を指さないQR（＝ロビーのQR）が
+          一瞬でもプロジェクターに出ると、読んだ人が別の場所へ行ってしまう。
+        */}
+        {roomCode ? (
+          <img
+            src={`/qr.png?room=${encodeURIComponent(roomCode)}`}
+            alt="参加用QR"
+            className="w-full rounded-xl bg-white p-2"
+          />
+        ) : (
+          <div className="aspect-square w-full rounded-xl bg-neutral-900" />
+        )}
         {/* QRが読めない席のために、コードを大きく出す。口頭でも読み上げられる形 */}
         <div className="text-center text-4xl font-black tracking-[0.2em]">
           {roomCode}
