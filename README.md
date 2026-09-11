@@ -52,6 +52,11 @@
 - 管理画面の参加者名をクリックすれば、司会の判断で個別に付け外しできる
 
 <p align="center">
+  <img src="docs/images/player-countdown.png" alt="お手つきした人のスマホ。「不正解 ユーザー1さん」とカウントダウンの3" width="300">
+</p>
+<p align="center"><sub>お手つきの瞬間。全画面で <code>3 → 2 → 1 → GO!</code> を数えてから受付が戻る</sub></p>
+
+<p align="center">
   <img src="docs/images/player-locked.png" alt="お手つきした人は「この曲はここまで」、ほかの人は押せる状態のまま" width="620">
 </p>
 <p align="center"><sub>お手つきした人だけがその問題から外れ、ほかの人はそのまま押せる</sub></p>
@@ -77,6 +82,11 @@
 - 曲リストは管理画面から直接編集できる。**JSONで書き出し・読み込みができる**ので、別のPCへ持ち込んだり、次回に使い回したりできる
 - **YouTubeのURLを貼るだけで、動画ID・曲名・アーティストが入る。** `t=` 付きのURL（YouTubeの「共有 → 現在の時間から」）を貼れば、サビの開始秒も一緒に取り込む
 - 曲名とアーティストは oEmbed から起こした**下書き**。「乃木坂46 『帰り道は遠回りしたくなる』」のような動画タイトルを、アーティストと曲名に割って入れる。アートトラック（「〇〇 - Topic」）にも対応している
+
+<p align="center">
+  <img src="docs/images/song-edit.png" alt="曲の編集フォーム。曲名・アーティスト・推した人・動画ID・イントロ開始秒・サビ開始秒" width="760">
+</p>
+<p align="center"><sub>動画IDの欄に <code>t=</code> 付きのURLを貼ると、サビ開始秒まで一緒に入る</sub></p>
 
 **答えが漏れない**
 
