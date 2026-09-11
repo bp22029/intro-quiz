@@ -136,7 +136,13 @@ function loadSongsFromDisk(): Song[] {
   // ビルド後は dist/songs.json、開発時は public/songs.json にある。
   // songs.json は実名を含むためコミットしない運用なので、
   // 未作成のクローンでも起動できるよう songs.sample.json へフォールバックする。
+  //
+  // SONGS_PATH は、リポジトリに置けない実データをデプロイ先へ差す口。
+  // Render の Secret Files（/etc/secrets/songs.json）を想定している。
+  // 読むだけで、書き戻しはしない（サーバーは曲を保存しない方針のまま）。
+  const fromEnv = process.env.SONGS_PATH?.trim();
   const candidates = [
+    ...(fromEnv ? [path.resolve(fromEnv)] : []),
     path.join(__dirname, "../dist/songs.json"),
     path.join(__dirname, "../public/songs.json"),
     path.join(__dirname, "../dist/songs.sample.json"),
@@ -150,8 +156,13 @@ function loadSongsFromDisk(): Song[] {
         console.log(`[songs] ${file} から ${songs.length}曲 読み込み`);
         return songs.slice(0, MAX_SONGS);
       }
-    } catch {
-      // 次の候補を試す
+      throw new Error("配列ではない");
+    } catch (e) {
+      // SONGS_PATH は人が指定したもの。黙ってサンプルへ落ちると
+      // 当日「3曲しか無い」と気づくことになるので、ここだけは知らせる。
+      if (file === candidates[0] && fromEnv) {
+        console.warn(`[songs] SONGS_PATH (${file}) を読めません: ${String(e)}`);
+      }
     }
   }
   console.warn("[songs] songs.json を読み込めませんでした");
