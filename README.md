@@ -38,6 +38,12 @@
 <p align="center">
   <img src="docs/images/screen-answerer.png" alt="投影画面に回答者名が大きく表示されている" width="760">
 </p>
+<p align="center"><sub>押した瞬間、投影画面が緑に変わって回答者名が出る</sub></p>
+
+<p align="center">
+  <img src="docs/images/player-buzzed.png" alt="押した本人には「あなたです どうぞ」、ほかの参加者には「ユーザー1さんが押しました」" width="620">
+</p>
+<p align="center"><sub>同じ瞬間の参加者の手元。押した本人と、押せなかった人で表示が分かれる</sub></p>
 
 **お手つき**
 
@@ -46,8 +52,9 @@
 - 管理画面の参加者名をクリックすれば、司会の判断で個別に付け外しできる
 
 <p align="center">
-  <img src="docs/images/screen-countdown.png" alt="お手つき後のカウントダウン表示" width="760">
+  <img src="docs/images/player-locked.png" alt="お手つきした人は「この曲はここまで」、ほかの人は押せる状態のまま" width="620">
 </p>
+<p align="center"><sub>お手つきした人だけがその問題から外れ、ほかの人はそのまま押せる</sub></p>
 
 **正解発表**
 
@@ -58,17 +65,18 @@
 <p align="center">
   <img src="docs/images/demo-reveal.gif" alt="正解発表の演出。溜めのあと曲名が1文字ずつ現れる" width="760">
 </p>
-<p align="center"><sub>溜めのあいだサビへの助走が鳴り、答えが出る瞬間にサビの頭が来る</sub></p>
+<p align="center"><sub>「正解は…」の溜めを挟んでから曲名が浮かび上がる。溜めのあいだ、サビへの助走が鳴っている</sub></p>
+
+<p align="center">
+  <img src="docs/images/screen-reveal.png" alt="正解発表。曲名・アーティスト・「あきらさんの推し曲」の帯・正解者名" width="760">
+</p>
+<p align="center"><sub>出そろった状態。金色の帯は <code>owner</code> が入っている曲だけに出る</sub></p>
 
 **出題データ**
 
 - 曲リストは管理画面から直接編集できる。**JSONで書き出し・読み込みができる**ので、別のPCへ持ち込んだり、次回に使い回したりできる
 - **YouTubeのURLを貼るだけで、動画ID・曲名・アーティストが入る。** `t=` 付きのURL（YouTubeの「共有 → 現在の時間から」）を貼れば、サビの開始秒も一緒に取り込む
 - 曲名とアーティストは oEmbed から起こした**下書き**。「乃木坂46 『帰り道は遠回りしたくなる』」のような動画タイトルを、アーティストと曲名に割って入れる。アートトラック（「〇〇 - Topic」）にも対応している
-
-<p align="center">
-  <img src="docs/images/song-edit.png" alt="曲の編集画面。YouTubeのURLを貼ると曲名とアーティストが自動で入る" width="760">
-</p>
 
 **答えが漏れない**
 
@@ -108,9 +116,9 @@ flowchart LR
 | `/host/<主催キー>` | 司会・出題者 | 手元PCで進行を操作する。ここだけが状態を変えられ、YouTubeモードの曲もここで鳴る |
 
 <p align="center">
-  <img src="docs/images/player-states.png" alt="参加者のスマホ画面。待機・早押しが通った状態・お手つきロック中" width="820">
+  <img src="docs/images/player-waiting.png" alt="参加者のスマホ画面。画面いっぱいの「押す！」ボタン" width="620">
 </p>
-<p align="center"><sub>参加者のスマホ。左から、待機／早押しが通った／お手つきでロック中</sub></p>
+<p align="center"><sub>参加者のスマホ。名前を入れると、あとは画面いっぱいのボタンだけになる</sub></p>
 
 <p align="center">
   <img src="docs/images/host-overview.png" alt="管理画面。進行操作、参加者一覧、問題一覧、演出の調整" width="820">
