@@ -1,39 +1,11 @@
 // YouTube URL から動画IDと再生開始位置を取り出すロジックの検証。
-// HostView.tsx の parseYouTube / ytUrl と同じ実装をここに写して検査する。
-// （tsx を素の node で読めないため。ロジックを変えたら両方直すこと）
-//   node scripts/urltest.mjs
+// 実装をそのまま import するので、tsx で実行する（node では .ts を読めない）:
+//   npx tsx scripts/urltest.ts
+// サーバーは不要（通信しない）。
+import { parseYouTube, ytUrl } from "../src/yturl";
 
-function parseYouTube(input) {
-  const v = input.trim();
-  const idMatch =
-    v.match(/[?&]v=([A-Za-z0-9_-]{5,})/) ??
-    v.match(/youtu\.be\/([A-Za-z0-9_-]{5,})/) ??
-    v.match(/\/embed\/([A-Za-z0-9_-]{5,})/);
-  const videoId = (idMatch ? idMatch[1] : v).slice(0, 40);
-
-  const tMatch = v.match(/[?&](?:t|start)=([0-9hms]+)/i);
-  let t = null;
-  if (tMatch) {
-    const raw = tMatch[1];
-    if (/^\d+$/.test(raw)) {
-      t = Number(raw);
-    } else {
-      const h = Number(raw.match(/(\d+)h/)?.[1] ?? 0);
-      const m = Number(raw.match(/(\d+)m/)?.[1] ?? 0);
-      const sec = Number(raw.match(/(\d+)s/)?.[1] ?? 0);
-      t = h * 3600 + m * 60 + sec;
-    }
-  }
-  return { videoId, t };
-}
-
-function ytUrl(videoId, sec) {
-  const t = Math.max(0, Math.floor(sec));
-  return `https://www.youtube.com/watch?v=${videoId}&t=${t}s&autoplay=1`;
-}
-
-const fail = [];
-function eq(label, got, want) {
+const fail: string[] = [];
+function eq(label: string, got: unknown, want: unknown) {
   const ok = JSON.stringify(got) === JSON.stringify(want);
   console.log(`${ok ? "PASS" : "FAIL"}  ${label}`);
   if (!ok) {
