@@ -4,7 +4,7 @@
 // 実装をそのまま import するので、tsx で実行する:
 //   npx tsx scripts/fittest.ts
 // サーバーは不要。
-import { fitVw, visualWidth } from "../src/textfit";
+import { fitVw, measuredWidth, visualWidth } from "../src/textfit";
 
 let ng = 0;
 function check(label: string, ok: boolean, detail = "") {
@@ -91,6 +91,43 @@ check(
   JSON.stringify(fitVw(veryLong, 7.8)),
 );
 check("空でも落ちない", fitVw("", 7.8).sizeVw === 7.8);
+
+// --- 実測の経路 ---
+// ブラウザでは canvas に幅を測らせる（半角を一律0.5emで数えると、英語の
+// タイトルが小さくなりすぎるため）。node には canvas が無いので、
+// 見積もりへ落ちること と 測れる場合の使い方 の両方をここで見る。
+check(
+  "canvas が無ければ見積もりに落ちる",
+  measuredWidth("Superfly", 900, 0.02) === null,
+  `得: ${measuredWidth("Superfly", 900, 0.02)}`,
+);
+check(
+  "字面を渡しても見積もりの結果は変わらない",
+  fitVw("Invisible Man", 7.8).sizeVw === fitVw("Invisible Man", 7.8, { weight: 900 }).sizeVw,
+);
+
+// 100px で測った幅を em に直し、letter-spacing を足していること。
+// document を差し替えて、1文字60pxを返す canvas を持たせる。
+(globalThis as unknown as { document: unknown }).document = {
+  createElement: () => ({
+    getContext: () => ({
+      font: "",
+      measureText: (t: string) => ({ width: t.length * 60 }),
+    }),
+  }),
+};
+const measured = measuredWidth("abcde", 900, 0.02);
+check(
+  "測れるときは 100px 基準の em + tracking",
+  measured !== null && Math.abs(measured - (5 * 60) / 100 - 5 * 0.02) < 1e-9,
+  `得: ${measured}`,
+);
+check(
+  "測れるときは見積もりより実測が優先される",
+  // 見積もりなら 5 * 0.5 = 2.5em → 64/2.5 = 25.6vw。実測は 3.1em → 20.6vw
+  Math.abs(fitVw("abcde", 30, { weight: 900, tracking: 0.02 }).sizeVw - 64 / 3.1) < 1e-6,
+  JSON.stringify(fitVw("abcde", 30, { weight: 900, tracking: 0.02 })),
+);
 
 console.log(ng === 0 ? "\nすべて PASS" : `\n${ng}件 FAIL`);
 process.exit(ng === 0 ? 0 : 1);

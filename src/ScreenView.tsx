@@ -11,6 +11,7 @@ import { beep, playBuzz, playWrong, preloadSfx, unlockAudio } from "./beep";
 import { RoomMissing, useRoomMissing } from "./RoomMissing";
 import { socket, syncState } from "./socket";
 import { fitVw } from "./textfit";
+import { useFontsReady } from "./useFontsReady";
 import type { State } from "./types";
 import { useCountdown } from "./useCountdown";
 
@@ -47,6 +48,9 @@ export default function ScreenView() {
   const [url, setUrl] = useState<string>("");
   const [ready, setReady] = useState(false); // 「準備」クリック済みか
   const roomMissing = useRoomMissing();
+  // 戻り値は使わない。Webフォントが載った時点で描き直させ、
+  // 文字の大きさを本物の字幅で測り直すために呼んでいる（src/textfit.ts）。
+  useFontsReady();
 
   // playing は投影画面では使わない（曲は管理画面が鳴らし、秒数表示も廃止した）
   const { index, revealed, wrongName, resumeInMs, revealInMs } = state.round;
@@ -132,9 +136,10 @@ export default function ScreenView() {
 
   // 大きい文字は枠に収まるまで縮める。日本語は単語の途中で改行されるので、
   // 折り返し位置を制御するより1行に収めるほうが確実（src/textfit.ts）。
-  const titleFit = fitVw(song?.title ?? "", 7.8);
-  const artistFit = fitVw(song?.artist ?? "", 3);
-  const buzzedFit = fitVw(buzzed?.name ?? "", 11.7);
+  // 字面は下の要素の className と合わせること。ずれると測った幅が合わなくなる。
+  const titleFit = fitVw(song?.title ?? "", 7.8, { weight: 900, tracking: 0.02 });
+  const artistFit = fitVw(song?.artist ?? "", 3, { weight: 500 });
+  const buzzedFit = fitVw(buzzed?.name ?? "", 11.7, { weight: 900, tracking: 0.02 });
 
   const shown = state.players.slice(0, MAX_CHIPS);
   const folded = state.players.length - shown.length;

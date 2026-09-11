@@ -7,10 +7,12 @@
 // 遠くから読む投影画面では見栄えもよい。放送のテロップと同じ考え方。
 
 /**
- * 見た目の幅を em 単位で数える。
+ * 見た目の幅を em 単位で数える（実測できないときの見積もり）。
  * 日本語のフォントは全角1文字がちょうど 1em、半角英数はおよそ 0.5em。
- * 厳密な字幅は測らない。ここは「収まるか」の見積もりなので、
- * 少なめに見えるほうへ倒しても実害がない。
+ * 半角を一律 0.5em と数えるので、`i` や `l` や空白の多い英語のタイトルは
+ * 実際より広く見積もられ、必要より小さい文字になる。ブラウザでは
+ * measuredWidth() が本物のフォントで測るので、こちらは node での検証と、
+ * canvas が使えない環境のための保険。
  */
 export function visualWidth(text: string): number {
   let w = 0;
@@ -33,6 +35,49 @@ const AVAILABLE_VW = 64;
 /** これ以下には縮めない。ここまで来たら縮めるより2行に割るほうが読める */
 const MIN_VW = 2.9;
 
+// 投影画面のフォント（Zen Kaku Gothic New）は半角英数がプロポーショナルで、
+// `W` と `i` では幅がまるで違う。見積もりだと英語のタイトルが小さくなりすぎるので、
+// 出せる環境では canvas に測らせる。index.css / tailwind.config.js と同じ並び。
+const FAMILY =
+  '"Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif';
+const BASE_PX = 100;
+
+/** canvas は使い回す。1文字ごとに作ると投影画面が重くなる。null は「使えない」 */
+let ctx: CanvasRenderingContext2D | null | undefined;
+
+/**
+ * 本物のフォントで幅を em 単位で測る。100px で測って割れば em になる。
+ * 測れなければ null（node、canvas が使えない環境）。呼ぶ側は見積もりへ落ちる。
+ */
+export function measuredWidth(
+  text: string,
+  weight: number,
+  tracking: number,
+): number | null {
+  if (typeof document === "undefined") return null;
+  if (ctx === undefined) {
+    try {
+      ctx = document.createElement("canvas").getContext("2d");
+    } catch {
+      ctx = null;
+    }
+  }
+  if (!ctx) return null;
+  ctx.font = `${weight} ${BASE_PX}px ${FAMILY}`;
+  const w = ctx.measureText(text).width / BASE_PX;
+  if (!(w > 0)) return null;
+  // letter-spacing は measureText に乗らないので足す
+  return w + tracking * [...text].length;
+}
+
+/** 測るときの字面。要素の font-weight / tracking と合わせること */
+export type FitStyle = {
+  /** font-black = 900、font-medium = 500 */
+  weight?: number;
+  /** tracking-[0.02em] なら 0.02 */
+  tracking?: number;
+};
+
 export type Fit = {
   /** 文字の大きさ（vw） */
   sizeVw: number;
@@ -43,9 +88,14 @@ export type Fit = {
 /**
  * text を maxVw 以下の大きさで、できれば1行に収める。
  * 1行にすると MIN_VW を下回るほど長い場合だけ、2行ぶんの幅で計算し直す。
+ *
+ * style は測るときの字面。ブラウザではこれで実測し、測れなければ見積もりを使う。
+ * フォントが後から載ると幅が変わるので、呼ぶ側は useFontsReady() で測り直すこと。
  */
-export function fitVw(text: string, maxVw: number): Fit {
-  const w = visualWidth(text.trim());
+export function fitVw(text: string, maxVw: number, style: FitStyle = {}): Fit {
+  const t = text.trim();
+  const w =
+    measuredWidth(t, style.weight ?? 400, style.tracking ?? 0) ?? visualWidth(t);
   if (w <= 0) return { sizeVw: maxVw, nowrap: true };
 
   const oneLine = AVAILABLE_VW / w;
