@@ -1,7 +1,7 @@
 {
   "name": "intro-quiz",
   "version": "1.0.0",
-  "description": "研究会交流会用 イントロクイズ早押しシステム",
+  "description": "スマホで早押し、プロジェクターで出題するイントロクイズ。インストール・登録なしで参加できるマルチルーム対応のWebアプリ",
   "private": true,
   "type": "commonjs",
   "scripts": {
@@ -15,7 +15,7 @@
     "type": "git",
     "url": "git+https://github.com/bp22029/intro-quiz.git"
   },
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.22.2",
     "qrcode": "^1.5.4",
