@@ -10,7 +10,7 @@
 | `demo-reveal.gif` | 正解発表の演出（第1問 → 「正解は…」 → 答え）。800×500 / 12.5fps / 5.5秒 |
 | `player-waiting.png` | 参加者のスマホ2台。どちらも「押す！」の待機 |
 | `player-buzzed.png` | 早押しが通った瞬間。押した本人と、押せなかった人 |
-| `player-countdown.png` | お手つきした人のスマホ。`3 → 2 → 1 → GO!` のカウントダウン |
+| `player-countdown.png` | お手つき直後の参加者2人ぶん。`3 → 2 → 1 → GO!` のカウントダウン |
 | `player-locked.png` | お手つきでロックされた人と、まだ押せる人 |
 | `host-overview.png` | 管理画面の全体 |
 | `song-edit.png` | 曲の編集フォーム（1曲ぶんを切り出したもの） |

@@ -52,9 +52,9 @@
 - 管理画面の参加者名をクリックすれば、司会の判断で個別に付け外しできる
 
 <p align="center">
-  <img src="docs/images/player-countdown.png" alt="お手つきした人のスマホ。「不正解 ユーザー1さん」とカウントダウンの3" width="300">
+  <img src="docs/images/player-countdown.png" alt="参加者2人のスマホ。どちらにも「不正解 ユーザー1さん」とカウントダウンの3が出ている" width="620">
 </p>
-<p align="center"><sub>お手つきの瞬間。全画面で <code>3 → 2 → 1 → GO!</code> を数えてから受付が戻る</sub></p>
+<p align="center"><sub>お手つきの瞬間。誰が外れたのかは<strong>全員の画面</strong>に出て、<code>3 → 2 → 1 → GO!</code> を数えてから受付が戻る</sub></p>
 
 <p align="center">
   <img src="docs/images/player-locked.png" alt="お手つきした人は「この曲はここまで」、ほかの人は押せる状態のまま" width="620">
