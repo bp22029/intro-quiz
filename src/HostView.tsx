@@ -363,11 +363,11 @@ export default function HostView() {
         {/*
           開演前に必ず通る画面なので、ここに置く。
           Chrome のプロファイルを取り違えると、事前チェックが全部通っていても
-          本番で Music Premium 限定の曲だけが鳴らない。原因に辿り着きにくい。
+          本番で YouTube Premium 限定の曲だけが鳴らない。原因に辿り着きにくい。
         */}
         <p className="max-w-md rounded-r2 border border-gold-dim bg-panel px-4 py-3 text-center text-sm leading-relaxed text-gold-bright">
           このブラウザのGoogleアカウントが、本番で使うものか確認してください。
-          Music Premium 限定の曲は、アカウントが違うと鳴りません。
+          YouTube Premium 限定の曲は、アカウントが違うと鳴りません。
         </p>
       </div>
     );
@@ -449,9 +449,8 @@ export default function HostView() {
         <div className="flex flex-col gap-3 xl:w-[44rem] xl:shrink-0">
           {/* 早押し状況 */}
           <div
-            className={`rounded-r2 px-5 py-6 text-center ${
-              showWrong ? "bg-miss" : buzzed ? "bg-win" : "bg-panel"
-            }`}
+            className={`rounded-r2 px-5 py-6 text-center ${showWrong ? "bg-miss" : buzzed ? "bg-win" : "bg-panel"
+              }`}
           >
             {showWrong ? (
               <>
@@ -560,7 +559,7 @@ export default function HostView() {
                   この曲は再生できません（{ytErrorMessage(ytError)}）
                   <div className="mt-1 text-sm text-miss-ink2">
                     {ytError === 101 || ytError === 150
-                      ? "まず、このブラウザのGoogleアカウントが本番で使うものか確認してください（Music Premium 限定の曲は別アカウントだと鳴りません）。それでも駄目なら埋め込み禁止・地域・年齢の制限です。手動モードへ切り替えるか、別の動画に差し替えてください"
+                      ? "まず、このブラウザのGoogleアカウントが本番で使うものか確認してください（YouTube Premium 限定の曲は別アカウントだと鳴りません）。それでも駄目なら埋め込み禁止・地域・年齢の制限です。手動モードへ切り替えるか、別の動画に差し替えてください"
                       : "手動モードへ切り替えてください"}
                   </div>
                 </div>
@@ -633,7 +632,7 @@ export default function HostView() {
                   ? `動画を準備中… ${yt.readyCount}/${yt.total}`
                   : revealed
                     ? // 答えを出した後に鳴っているのはサビ。文言を実態に合わせる
-                      playing
+                    playing
                       ? <>{Ico.pause()}サビを止める</>
                       : <>{Ico.play()}サビを再生</>
                     : playing
@@ -765,9 +764,9 @@ export default function HostView() {
                   // 取り返しがつかない操作なので必ず確認する
                   const ok = window.confirm(
                     `参加者 ${state.players.length}人 をすべて消します。\n` +
-                      `お手つきの記録も消えます。\n\n` +
-                      `いま繋がっている人は自動で入り直すので、\n` +
-                      `もう居ない人だけが消えます。\n\n実行しますか？`,
+                    `お手つきの記録も消えます。\n\n` +
+                    `いま繋がっている人は自動で入り直すので、\n` +
+                    `もう居ない人だけが消えます。\n\n実行しますか？`,
                   );
                   if (ok) socket.emit("host:clearPlayers");
                 }}
@@ -783,8 +782,8 @@ export default function HostView() {
             <ul className="flex flex-wrap gap-2">
               {state.players.map((p) => {
                 const locked =
-                    state.lockedIds.includes(p.id) ||
-                    state.lockedNames.includes(p.name);
+                  state.lockedIds.includes(p.id) ||
+                  state.lockedNames.includes(p.name);
                 return (
                   <li key={p.id}>
                     <button
@@ -792,12 +791,11 @@ export default function HostView() {
                         e.currentTarget.blur();
                         socket.emit("host:toggleLock", p.id);
                       }}
-                      title={locked ? "お手つきを解除する" : "お手つきにする" }
-                      className={`rounded-r1 px-2.5 py-1 ${
-                        locked
+                      title={locked ? "お手つきを解除する" : "お手つきにする"}
+                      className={`rounded-r1 px-2.5 py-1 ${locked
                           ? "bg-ground text-chip-ink line-through"
                           : "bg-sink text-ink hover:bg-rule"
-                      }`}
+                        }`}
                     >
                       {p.name}
                       {locked && <span className="ml-1 text-xs no-underline">お手つき</span>}
@@ -839,11 +837,10 @@ export default function HostView() {
                         e.currentTarget.blur();
                         socket.emit("host:setSong", i);
                       }}
-                      className={`w-full rounded-r1 px-3 py-2 text-left ${
-                        i === index
+                      className={`w-full rounded-r1 px-3 py-2 text-left ${i === index
                           ? "bg-panel text-ink"
                           : "text-ink-2 hover:bg-sink"
-                      }`}
+                        }`}
                     >
                       <div className="truncate">
                         {i + 1}. {s.title}
@@ -1013,11 +1010,10 @@ function YtBtn({
         e.currentTarget.blur();
         onClick();
       }}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-r1 px-3 py-2 text-base font-bold ${
-        accent
+      className={`inline-flex items-center justify-center gap-1.5 rounded-r1 px-3 py-2 text-base font-bold ${accent
           ? "bg-gold text-ground hover:bg-gold-bright"
           : "bg-sink text-ink hover:bg-gold"
-      }`}
+        }`}
     >
       {label}
     </button>
@@ -1041,7 +1037,7 @@ function RoomBar({ roomCode, hostKey }: { roomCode: string; hostKey: string }) {
     fetch(`/api/url?room=${encodeURIComponent(roomCode)}`)
       .then((r) => r.json())
       .then((d: { url?: string }) => d.url && setJoinUrl(d.url))
-      .catch(() => {});
+      .catch(() => { });
   }, [roomCode]);
 
   const hostUrl = window.location.origin + hostPath(hostKey);
@@ -1134,11 +1130,10 @@ function ModeToggle({
             onChange();
             socket.emit("host:setMode", m);
           }}
-          className={`px-3 py-1 ${
-            mode === m
+          className={`px-3 py-1 ${mode === m
               ? "bg-gold font-bold text-ground"
               : "text-ink-3 hover:bg-sink"
-          }`}
+            }`}
         >
           {m === "manual" ? "手動" : "YouTube"}
         </button>
@@ -1580,11 +1575,10 @@ function IconBtn({
         onClick();
       }}
       disabled={disabled}
-      className={`rounded-r1 border px-3 py-1 text-sm disabled:opacity-30 ${
-        danger
+      className={`rounded-r1 border px-3 py-1 text-sm disabled:opacity-30 ${danger
           ? "border-miss-border text-miss-ink2 hover:bg-miss-deep"
           : "border-chip text-ink-2 hover:bg-sink"
-      }`}
+        }`}
     >
       {label}
     </button>

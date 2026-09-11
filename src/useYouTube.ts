@@ -402,7 +402,7 @@ export function useYouTube(
 /** エラーコードを日本語文言にする。101 と 150 は「埋め込み再生が禁止されています」 */
 export function ytErrorMessage(code: number): string {
   if (code === 101 || code === 150) {
-    // 埋め込み設定が禁止のときだけでなく、Music Premium 限定・地域制限・
+    // 埋め込み設定が禁止のときだけでなく、YouTube Premium 限定・地域制限・
     // 年齢制限でも同じコードが返る。oEmbed は埋め込み設定しか見ないので、
     // 事前チェックが 200 でもここで落ちることがある。
     // 「埋め込み禁止」と言い切ると原因を探す先を誤らせるので、断定しない。
