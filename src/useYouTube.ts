@@ -33,7 +33,18 @@ export type YouTubeController = {
    * 「正解は…」の溜めのあいだの助走に使う。曲がぬるっと立ち上がってくる。
    */
   fadeInAndPlay: (index: number, sec: number, ms: number) => void;
+  /**
+   * エラー表示を消して、その曲を頭出しし直す。
+   * 一度エラーが出た曲は操作を受け付けなくなるので、司会が手で戻せるようにする。
+   */
+  retry: (index: number) => void;
 };
+
+/**
+ * プレイヤーを作ること自体に失敗したときのコード。
+ * YouTube のエラーコード（2/5/100/101/150）とぶつからない値を使う。
+ */
+const PLAYER_INIT_FAILED = -1;
 
 /** その曲を鳴らす音量。曲に設定が無ければ全体音量に従う */
 function volumeOf(song: Song | undefined, master: number): number {
@@ -133,6 +144,32 @@ export function useYouTube(
     [],
   );
 
+  /** その曲の準備完了を1度だけ数える */
+  const markReady = useCallback((index: number): void => {
+    if (readyFlagsRef.current[index]) return;
+    readyFlagsRef.current[index] = true;
+    setReadyCount((count) => count + 1);
+  }, []);
+
+  const markError = useCallback((index: number, code: number): void => {
+    errorsRef.current = { ...errorsRef.current, [index]: code };
+    setErrors(errorsRef.current);
+  }, []);
+
+  /**
+   * その曲のエラー表示を消す。
+   * エラーが出た曲は getControllablePlayer が弾くので、一度出ると
+   * 曲を差し替えるまで管理画面から操作できないままになる。
+   * 一時的な失敗（読み込み中の通信断など）から戻れる口をここで開ける。
+   */
+  const clearError = useCallback((index: number): void => {
+    if (!Object.prototype.hasOwnProperty.call(errorsRef.current, index)) return;
+    const next = { ...errorsRef.current };
+    delete next[index];
+    errorsRef.current = next;
+    setErrors(next);
+  }, []);
+
   const songsKey = songs
     .map(
       ({ videoId, startSec }) =>
@@ -153,8 +190,8 @@ export function useYouTube(
 
     if (!enabled) return;
 
-    const elements = songs.map((_, index) => elementsRef.current[index]);
-    if (elements.some((element) => !element)) return;
+    const containers = songs.map((_, index) => elementsRef.current[index]);
+    if (containers.some((container) => !container)) return;
 
     void loadYouTubeApi()
       .then(() => {
@@ -163,65 +200,78 @@ export function useYouTube(
         playersRef.current = createdPlayers;
 
         songs.forEach((song, index) => {
-          const element = elements[index];
-          if (!element) return;
+          const container = containers[index];
+          if (!container) return;
 
           if (!song.videoId) {
             // 動画IDが未設定の行にはプレイヤーを作らない。
             // 作ると onReady が来ないまま「準備中」で止まり、
             // その1行のせいで全曲の再生ボタンが押せなくなる。
-            if (!readyFlagsRef.current[index]) {
-              readyFlagsRef.current[index] = true;
-              setReadyCount((count) => count + 1);
-            }
+            markReady(index);
             return;
           }
 
-          const player = new window.YT.Player(element, {
-            playerVars: {
-              controls: 0,
-              disablekb: 1,
-              rel: 0,
-              modestbranding: 1,
-              playsinline: 1,
-              // 字幕とアノテーションを出さない。歌詞の字幕が出ると答えが見えるうえ、
-              // 小さい枠では画面の半分を覆ってしまう。
-              // なお視聴者のアカウントが「字幕を常に表示」になっている場合は、
-              // ここでは抑えきれない（YouTube 側の設定が優先される）。
-              cc_load_policy: 0,
-              iv_load_policy: 3,
-            },
-            events: {
-              onReady: (event: any) => {
-                if (cancelled || generationRef.current !== generation) return;
+          // YouTube API は渡した要素を iframe で「置き換える」。React が持つ
+          // 参照は置換前の div のまま残るので、曲を差し替えたあと同じ参照へ
+          // 作り直すと、親を失った要素への置換になって例外が飛ぶ。
+          // それが下の catch に飲まれて「動画を準備中… 0 / 10」から進まなく
+          // なっていた。毎回ここで使い捨ての div を作り、React が中身を
+          // 触らない場所（ref で受けた箱の内側）を YouTube に差し出す。
+          container.replaceChildren();
+          const mount = document.createElement("div");
+          container.appendChild(mount);
 
-                event.target.cueVideoById({
-                  videoId: song.videoId,
-                  startSeconds: song.startSec,
-                });
-                event.target.setVolume(
-                  volumeOf(songsRef.current[index], masterRef.current),
-                );
-
-                if (!readyFlagsRef.current[index]) {
-                  readyFlagsRef.current[index] = true;
-                  setReadyCount((count) => count + 1);
-                }
+          try {
+            createdPlayers[index] = new window.YT.Player(mount, {
+              playerVars: {
+                controls: 0,
+                disablekb: 1,
+                rel: 0,
+                modestbranding: 1,
+                playsinline: 1,
+                // 字幕とアノテーションを出さない。歌詞の字幕が出ると答えが見えるうえ、
+                // 小さい枠では画面の半分を覆ってしまう。
+                // なお視聴者のアカウントが「字幕を常に表示」になっている場合は、
+                // ここでは抑えきれない（YouTube 側の設定が優先される）。
+                cc_load_policy: 0,
+                iv_load_policy: 3,
               },
-              onError: (event: any) => {
-                if (cancelled || generationRef.current !== generation) return;
+              events: {
+                onReady: (event: any) => {
+                  if (cancelled || generationRef.current !== generation) return;
 
-                const code = Number(event.data);
-                errorsRef.current = {
-                  ...errorsRef.current,
-                  [index]: code,
-                };
-                setErrors(errorsRef.current);
+                  event.target.cueVideoById({
+                    videoId: song.videoId,
+                    startSeconds: song.startSec,
+                  });
+                  event.target.setVolume(
+                    volumeOf(songsRef.current[index], masterRef.current),
+                  );
+
+                  markReady(index);
+                },
+                onStateChange: (event: any) => {
+                  if (cancelled || generationRef.current !== generation) return;
+
+                  // 実際に音が出ている（PLAYING / BUFFERING）なら、前に出た
+                  // エラーはもう過去のもの。埋め込みを直接クリックすれば鳴るのに
+                  // 管理画面からは操作できない、という状態から戻す。
+                  const state = Number(event.data);
+                  if (state === 1 || state === 3) clearError(index);
+                },
+                onError: (event: any) => {
+                  if (cancelled || generationRef.current !== generation) return;
+
+                  markError(index, Number(event.data));
+                },
               },
-            },
-          });
-
-          createdPlayers[index] = player;
+            });
+          } catch {
+            // 1曲の失敗で残りの曲まで作り損ねない。その曲だけエラーにして、
+            // 他の曲の再生ボタンは押せるようにする。
+            markError(index, PLAYER_INIT_FAILED);
+            markReady(index);
+          }
         });
       })
       .catch(() => {
@@ -241,12 +291,14 @@ export function useYouTube(
           // 破棄済みでも後続のクリーンアップを続ける。
         }
       });
+      // destroy() が取り残した iframe を片付ける。次の世代は空の箱から始める。
+      containers.forEach((container) => container?.replaceChildren());
 
       if (generationRef.current === generation) {
         playersRef.current = [];
       }
     };
-  }, [enabled, songsKey, refVersion]);
+  }, [enabled, songsKey, refVersion, markReady, markError, clearError]);
 
   const getControllablePlayer = useCallback((index: number): any | null => {
     if (!enabledRef.current || !Number.isInteger(index)) return null;
@@ -382,6 +434,28 @@ export function useYouTube(
     [getControllablePlayer],
   );
 
+  const retry = useCallback(
+    (index: number): void => {
+      const song = songsRef.current[index];
+      const player = playersRef.current[index];
+      // エラー中の曲は getControllablePlayer が弾くので、ここでは直接触る。
+      if (!player || !song?.videoId) return;
+
+      cancelFade();
+      clearError(index);
+      try {
+        player.cueVideoById({
+          videoId: song.videoId,
+          startSeconds: song.startSec,
+        });
+        player.setVolume(volumeOf(song, masterRef.current));
+      } catch {
+        markError(index, PLAYER_INIT_FAILED);
+      }
+    },
+    [cancelFade, clearError, markError],
+  );
+
   const visibleReadyCount = enabled ? readyCount : 0;
 
   return {
@@ -396,6 +470,7 @@ export function useYouTube(
     seekAndPlay,
     setVolume,
     fadeInAndPlay,
+    retry,
   };
 }
 
@@ -410,6 +485,8 @@ export function ytErrorMessage(code: number): string {
   }
 
   switch (code) {
+    case PLAYER_INIT_FAILED:
+      return "プレイヤーを作れませんでした";
     case 2:
       return "動画IDまたはリクエストが不正です";
     case 5:

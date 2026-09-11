@@ -560,8 +560,22 @@ export default function HostView() {
                   <div className="mt-1 text-sm text-miss-ink2">
                     {ytError === 101 || ytError === 150
                       ? "まず、このブラウザのGoogleアカウントが本番で使うものか確認してください（YouTube Premium 限定の曲は別アカウントだと鳴りません）。それでも駄目なら埋め込み禁止・地域・年齢の制限です。手動モードへ切り替えるか、別の動画に差し替えてください"
-                      : "手動モードへ切り替えてください"}
+                      : "「もう一度読み込む」で直ることがあります。駄目なら手動モードへ切り替えてください"}
                   </div>
+                  {/*
+                    エラーが出た曲は操作を受け付けなくなる。通信が一瞬切れた
+                    だけでも同じ状態になり、曲を差し替えるまで戻れなかった。
+                    司会が自分で戻せる口をここに置く。
+                  */}
+                  <button
+                    onClick={(e) => {
+                      e.currentTarget.blur();
+                      yt.retry(index);
+                    }}
+                    className="mt-2 rounded-full border border-miss-border px-4 py-1 text-sm text-miss-ink hover:bg-miss-deep"
+                  >
+                    もう一度読み込む
+                  </button>
                 </div>
               )}
             </div>
